@@ -16,7 +16,7 @@ export interface PlanTaskResponse {
   id: number | null;
   title: string;
   taskTypeId: number | null;
-  durationMinutes: 30 | 60;
+  durationMinutes: number;
   orderIndex: number;
 }
 

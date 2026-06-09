@@ -96,94 +96,15 @@ export function TaskTypesPage() {
     <div className="page-stack">
       {feedback ? <div className="feedback-banner">{feedback}</div> : null}
 
-      <section className="two-column-grid">
-        <article className="content-panel">
+      <section className="two-column-grid types-layout">
+        <article className="content-panel focus-panel types-library-panel">
           <div className="panel-header">
             <div>
-              <h2>{editingId ? "编辑任务类型" : "新增任务类型"}</h2>
-              <p>图标和描述会同步显示在日程表、统计页和投骰子记录里。</p>
+              <p className="eyebrow">Library</p>
+              <h2>任务类型库</h2>
+              <p>先看已有分类，再决定是新建还是调整，避免整页同时出现两个主操作区。</p>
             </div>
-            {editingId ? (
-              <button className="ghost-button" type="button" onClick={resetForm}>
-                <X size={16} />
-                取消编辑
-              </button>
-            ) : null}
-          </div>
-
-          <div className="form-grid">
-            <label className="field">
-              <span>类型名称</span>
-              <input
-                type="text"
-                value={form.name}
-                placeholder="例如：深度工作、运动、做饭"
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              />
-            </label>
-
-            <label className="field field-span-2">
-              <span>描述</span>
-              <input
-                type="text"
-                value={form.description}
-                placeholder="这个类型通常用来做什么"
-                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              />
-            </label>
-          </div>
-
-          <div className="icon-picker">
-            {TASK_ICON_CHOICES.map((choice) => (
-              <button
-                key={choice.key}
-                type="button"
-                className={form.iconKey === choice.key ? "icon-choice active" : "icon-choice"}
-                title={choice.label}
-                aria-label={choice.label}
-                aria-pressed={form.iconKey === choice.key}
-                onClick={() =>
-                  setForm((current) => ({
-                    ...current,
-                    iconKey: choice.key,
-                    colorHex: choice.colorHex,
-                  }))
-                }
-              >
-                <span className="task-icon-wrap" style={{ backgroundColor: `${choice.colorHex}22` }}>
-                  <TaskIcon iconKey={choice.key} className="task-icon" />
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="type-preview-card">
-            <span className="task-icon-wrap" style={{ backgroundColor: `${form.colorHex}22` }}>
-              <TaskIcon iconKey={form.iconKey} className="task-icon" />
-            </span>
-            <div>
-              <strong>{form.name || "预览中的任务类型"}</strong>
-              <p>{form.description || "你选中的图标和描述会出现在日程与统计界面。"}</p>
-            </div>
-          </div>
-
-          <div className="panel-actions align-start">
-            <button className="primary-button" type="button" onClick={() => void submit()} disabled={isSaving}>
-              <Plus size={16} />
-              {isSaving ? "保存中..." : editingId ? "更新类型" : "创建类型"}
-            </button>
-            <button className="ghost-button" type="button" onClick={resetForm}>
-              清空表单
-            </button>
-          </div>
-        </article>
-
-        <aside className="content-panel">
-          <div className="panel-header">
-            <div>
-              <h2>类型库</h2>
-              <p>这里可以直接编辑和删除任务类型，操作会实时影响后续计划的分类选择。</p>
-            </div>
+            <span className="badge-soft">共 {types.length} 个类型</span>
           </div>
 
           <div className="type-list">
@@ -229,6 +150,88 @@ export function TaskTypesPage() {
             ))}
 
             {types.length === 0 ? <div className="empty-state">还没有任务类型，先创建一个吧。</div> : null}
+          </div>
+        </article>
+
+        <aside className="content-panel secondary-panel types-editor-panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">{editingId ? "Edit" : "Create"}</p>
+              <h2>{editingId ? "编辑任务类型" : "新增任务类型"}</h2>
+              <p>编辑器保持在右侧辅助区，减少与类型列表争抢视线。</p>
+            </div>
+            {editingId ? (
+              <button className="ghost-button" type="button" onClick={resetForm}>
+                <X size={16} />
+                取消编辑
+              </button>
+            ) : null}
+          </div>
+
+          <div className="form-grid">
+            <label className="field">
+              <span>类型名称</span>
+              <input
+                type="text"
+                value={form.name}
+                placeholder="例如：深度工作、运动、做饭"
+                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              />
+            </label>
+
+            <label className="field field-span-2">
+              <span>描述</span>
+              <input
+                type="text"
+                value={form.description}
+                placeholder="这个类型通常用来做什么"
+                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className="type-preview-card">
+            <span className="task-icon-wrap" style={{ backgroundColor: `${form.colorHex}22` }}>
+              <TaskIcon iconKey={form.iconKey} className="task-icon" />
+            </span>
+            <div>
+              <strong>{form.name || "预览中的任务类型"}</strong>
+              <p>{form.description || "图标与描述会同步出现在日程与统计界面。"}</p>
+            </div>
+          </div>
+
+          <div className="icon-picker">
+            {TASK_ICON_CHOICES.map((choice) => (
+              <button
+                key={choice.key}
+                type="button"
+                className={form.iconKey === choice.key ? "icon-choice active" : "icon-choice"}
+                title={choice.label}
+                aria-label={choice.label}
+                aria-pressed={form.iconKey === choice.key}
+                onClick={() =>
+                  setForm((current) => ({
+                    ...current,
+                    iconKey: choice.key,
+                    colorHex: choice.colorHex,
+                  }))
+                }
+              >
+                <span className="task-icon-wrap" style={{ backgroundColor: `${choice.colorHex}22` }}>
+                  <TaskIcon iconKey={choice.key} className="task-icon" />
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="panel-actions align-start">
+            <button className="primary-button" type="button" onClick={() => void submit()} disabled={isSaving}>
+              <Plus size={16} />
+              {isSaving ? "保存中..." : editingId ? "更新类型" : "创建类型"}
+            </button>
+            <button className="ghost-button" type="button" onClick={resetForm}>
+              清空表单
+            </button>
           </div>
         </aside>
       </section>

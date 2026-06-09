@@ -1,11 +1,16 @@
 import type { PlanTaskResponse, SeasonMode, TaskTypeResponse } from "../api/types";
 
+export const BREAK_MINUTES = 5;
+export const MIN_SLOT_DURATION_MINUTES = 10;
+export const MAX_SLOT_DURATION_MINUTES = 1440;
+
 export interface ScheduleBlock {
   id: string;
   title: string;
   typeName: string;
   typeIcon: string;
   typeColor: string;
+  taskOrderIndex: number | null;
   durationMinutes: number;
   localStartTime: string;
   localEndTime: string;
@@ -13,6 +18,16 @@ export interface ScheduleBlock {
   beijingEndTime: string;
   editable: boolean;
   breakBlock: boolean;
+}
+
+export interface TaskTimelineEntry {
+  orderIndex: number;
+  slotStartMinutes: number;
+  taskStartMinutes: number;
+  taskEndMinutes: number;
+  slotDurationMinutes: number;
+  focusMinutes: number;
+  hasBreakBefore: boolean;
 }
 
 export function todayIsoDate() {
@@ -33,6 +48,23 @@ export function toClock(totalMinutes: number) {
 export function parseClock(value: string) {
   const [hours, minutes] = value.split(":").map(Number);
   return (hours * 60) + minutes;
+}
+
+export function resolveClockAtOrAfter(anchorMinutes: number, value: string) {
+  let minutes = parseClock(value);
+  while (minutes <= anchorMinutes) {
+    minutes += 1440;
+  }
+  return minutes;
+}
+
+export function normalizeSlotDuration(minutes: number) {
+  if (!Number.isFinite(minutes)) {
+    return MIN_SLOT_DURATION_MINUTES;
+  }
+
+  const rounded = Math.round(minutes / 5) * 5;
+  return Math.min(MAX_SLOT_DURATION_MINUTES, Math.max(MIN_SLOT_DURATION_MINUTES, rounded));
 }
 
 export function formatMinutes(totalMinutes: number) {
@@ -58,44 +90,27 @@ export function buildScheduleBlocks(
 ) {
   const offsetMinutes = seasonMode === "SUMMER" ? 360 : 420;
   const taskTypeMap = new Map(taskTypes.map((item) => [item.id, item]));
-  let cursor = parseClock(dayStartLocalTime);
+  const timeline = buildTaskTimeline(tasks, dayStartLocalTime);
 
   const blocks: ScheduleBlock[] = [];
 
   [...tasks]
     .sort((left, right) => left.orderIndex - right.orderIndex)
     .forEach((task, index) => {
+      const timelineEntry = timeline[index];
       const taskType = task.taskTypeId ? taskTypeMap.get(task.taskTypeId) : undefined;
-      const localStart = cursor;
-      const localEnd = cursor + task.durationMinutes;
 
-      blocks.push({
-        id: `task-${task.id ?? index}`,
-        title: task.title || "未命名任务",
-        typeName: taskType?.name ?? "未分类",
-        typeIcon: taskType?.iconKey ?? "sparkles",
-        typeColor: taskType?.colorHex ?? "#F47B20",
-        durationMinutes: task.durationMinutes,
-        localStartTime: toClock(localStart),
-        localEndTime: toClock(localEnd),
-        beijingStartTime: toClock(localStart + offsetMinutes),
-        beijingEndTime: toClock(localEnd + offsetMinutes),
-        editable: true,
-        breakBlock: false,
-      });
-
-      cursor = localEnd;
-
-      if (index < tasks.length - 1) {
-        const breakStart = cursor;
-        const breakEnd = cursor + 5;
+      if (timelineEntry.hasBreakBefore) {
+        const breakStart = timelineEntry.slotStartMinutes;
+        const breakEnd = timelineEntry.taskStartMinutes;
         blocks.push({
           id: `break-${index}`,
           title: "休息 5 分钟",
           typeName: "系统休息",
           typeIcon: "coffee",
           typeColor: "#F8E6D2",
-          durationMinutes: 5,
+          taskOrderIndex: null,
+          durationMinutes: BREAK_MINUTES,
           localStartTime: toClock(breakStart),
           localEndTime: toClock(breakEnd),
           beijingStartTime: toClock(breakStart + offsetMinutes),
@@ -103,13 +118,55 @@ export function buildScheduleBlocks(
           editable: false,
           breakBlock: true,
         });
-        cursor = breakEnd;
       }
+
+      blocks.push({
+        id: `task-${task.id ?? index}`,
+        title: task.title || "未命名任务",
+        typeName: taskType?.name ?? "未分类",
+        typeIcon: taskType?.iconKey ?? "sparkles",
+        typeColor: taskType?.colorHex ?? "#F47B20",
+        taskOrderIndex: task.orderIndex,
+        durationMinutes: timelineEntry.focusMinutes,
+        localStartTime: toClock(timelineEntry.taskStartMinutes),
+        localEndTime: toClock(timelineEntry.taskEndMinutes),
+        beijingStartTime: toClock(timelineEntry.taskStartMinutes + offsetMinutes),
+        beijingEndTime: toClock(timelineEntry.taskEndMinutes + offsetMinutes),
+        editable: true,
+        breakBlock: false,
+      });
     });
 
   return {
     blocks,
-    focusMinutes: tasks.reduce((sum, item) => sum + item.durationMinutes, 0),
-    breakMinutes: tasks.length > 1 ? (tasks.length - 1) * 5 : 0,
+    focusMinutes: timeline.reduce((sum, item) => sum + item.focusMinutes, 0),
+    breakMinutes: timeline.filter((item) => item.hasBreakBefore).length * BREAK_MINUTES,
   };
+}
+
+export function buildTaskTimeline(tasks: PlanTaskResponse[], dayStartLocalTime: string) {
+  let cursor = parseClock(dayStartLocalTime);
+
+  return [...tasks]
+    .sort((left, right) => left.orderIndex - right.orderIndex)
+    .map((task, index) => {
+      const slotDurationMinutes = normalizeSlotDuration(task.durationMinutes);
+      const hasBreakBefore = index > 0;
+      const taskStartMinutes = hasBreakBefore ? cursor + BREAK_MINUTES : cursor;
+      const taskEndMinutes = cursor + slotDurationMinutes;
+      const focusMinutes = Math.max(taskEndMinutes - taskStartMinutes, 0);
+
+      const entry: TaskTimelineEntry = {
+        orderIndex: index,
+        slotStartMinutes: cursor,
+        taskStartMinutes,
+        taskEndMinutes,
+        slotDurationMinutes,
+        focusMinutes,
+        hasBreakBefore,
+      };
+
+      cursor = taskEndMinutes;
+      return entry;
+    });
 }

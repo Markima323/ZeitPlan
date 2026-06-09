@@ -46,6 +46,12 @@ export function DicePage() {
   const [isRolling, setIsRolling] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  function mergeHistory(nextRolls: DiceRollResponse[]) {
+    return [...nextRolls].sort(
+      (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+    );
+  }
+
   async function loadData() {
     try {
       setFeedback(null);
@@ -54,7 +60,7 @@ export function DicePage() {
         apiClient.getDiceHistory(selectedDate),
       ]);
       setHasPlan(plan.tasks.length > 0);
-      setHistory(nextHistory);
+      setHistory(mergeHistory(nextHistory));
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "读取投骰子信息失败");
     }
@@ -72,7 +78,8 @@ export function DicePage() {
 
         if (!cancelled) {
           setHasPlan(plan.tasks.length > 0);
-          setHistory(nextHistory);
+          setHistory(mergeHistory(nextHistory));
+          setLatestRoll(nextHistory.at(-1) ?? null);
         }
       } catch (error) {
         if (!cancelled) {
@@ -100,14 +107,24 @@ export function DicePage() {
     return null;
   }, [history.length]);
 
+  const completedRollCount = Math.min(history.length, 2);
+
   const canRollToday = useMemo(() => {
     const today = todayIsoDate();
     const hour = new Date().getHours();
-    return selectedDate === today && hour >= 17 && hasPlan && nextPhase !== null;
-  }, [hasPlan, nextPhase, selectedDate]);
+    return selectedDate === today && hour >= 17 && hasPlan && completedRollCount < 2 && nextPhase !== null;
+  }, [completedRollCount, hasPlan, nextPhase, selectedDate]);
+
+  const availabilityText = hasPlan ? "已识别到当日日计划" : "当天还没有日计划";
+  const phaseText =
+    nextPhase === "MATERIAL"
+      ? "下一掷：物质奖励"
+      : nextPhase === "PRAISE"
+        ? "下一掷：夸夸奖励"
+        : "今天的两次投掷都已完成";
 
   async function startRoll() {
-    if (!nextPhase) {
+    if (isRolling || !canRollToday || !nextPhase) {
       return;
     }
 
@@ -123,8 +140,16 @@ export function DicePage() {
       const [result] = await Promise.all([apiClient.rollDice(selectedDate, nextPhase), wait(1500)]);
       setLatestRoll(result);
       setRollingValue(result.value);
+      setHistory((current) => {
+        if (current.some((item) => item.id === result.id)) {
+          return current;
+        }
+
+        return mergeHistory([...current, result]);
+      });
       await loadData();
     } catch (error) {
+      await loadData();
       setFeedback(error instanceof Error ? error.message : "投骰子失败");
     } finally {
       window.clearInterval(intervalId);
@@ -137,11 +162,11 @@ export function DicePage() {
       {feedback ? <div className="feedback-banner">{feedback}</div> : null}
 
       <section className="planner-layout dice-layout">
-        <article className="content-panel">
+        <article className="content-panel focus-panel dice-main-panel">
           <div className="panel-header">
             <div>
+              <p className="eyebrow">Dice</p>
               <h2>今日投掷</h2>
-              <p>只有当天存在每日计划，并且本地时间过了 17:00，才会解锁两次机会。</p>
             </div>
             <label className="field compact-field">
               <span>日期</span>
@@ -151,6 +176,17 @@ export function DicePage() {
                 onChange={(event) => setSelectedDate(event.target.value)}
               />
             </label>
+          </div>
+
+          <div className="dice-status-line">
+            <span className="dice-status-pill">
+              <Gift size={16} />
+              {availabilityText}
+            </span>
+            <span className="dice-status-pill">
+              <Sparkles size={16} />
+              {phaseText}
+            </span>
           </div>
 
           <div className="dice-stage">
@@ -164,29 +200,6 @@ export function DicePage() {
                     ? "第 2 次：夸夸奖励"
                     : "今日已投完"}
               </p>
-            </div>
-
-            <div className="dice-status-grid">
-              <article className="status-tile">
-                <Gift size={18} />
-                <div>
-                  <strong>是否有日计划</strong>
-                  <p>{hasPlan ? "有，已解锁资格前提" : "没有，当天需先有计划"}</p>
-                </div>
-              </article>
-              <article className="status-tile">
-                <Sparkles size={18} />
-                <div>
-                  <strong>当前状态</strong>
-                  <p>
-                    {nextPhase
-                      ? canRollToday
-                        ? "可以开始投掷"
-                        : "还未到 17:00 或日期不是今天"
-                      : "今天两次投掷都已经完成"}
-                  </p>
-                </div>
-              </article>
             </div>
 
             <button
@@ -216,11 +229,12 @@ export function DicePage() {
           </div>
         </article>
 
-        <aside className="content-panel history-panel">
+        <aside className="content-panel secondary-panel history-panel dice-history-panel">
           <div className="panel-header">
             <div>
-              <h2>历史侧边栏</h2>
-              <p>这里会记录当天两次投掷的结果与时间。</p>
+              <p className="eyebrow">History</p>
+              <h2>投掷记录</h2>
+              <p>历史结果保持在侧边查看，不打断当前的投掷动作。</p>
             </div>
           </div>
 

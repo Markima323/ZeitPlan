@@ -24,16 +24,6 @@ export function AdminPage() {
   const [overview, setOverview] = useState<AdminOverviewResponse | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  async function loadOverview() {
-    try {
-      setFeedback(null);
-      const nextOverview = await apiClient.getAdminOverview(fromDate, toDate);
-      setOverview(nextOverview);
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "读取后台统计失败");
-    }
-  }
-
   useEffect(() => {
     let cancelled = false;
 
@@ -61,13 +51,14 @@ export function AdminPage() {
     <div className="page-stack">
       {feedback ? <div className="feedback-banner">{feedback}</div> : null}
 
-      <section className="content-panel">
+      <section className="content-panel secondary-panel admin-toolbar">
         <div className="panel-header">
           <div>
-            <h2>筛选范围</h2>
-            <p>查看每天的计划，以及一段时间内每种任务类型的总时长。</p>
+            <p className="eyebrow">Overview</p>
+            <h2>后台统计</h2>
+            <p>顶部只保留时间范围和摘要，把阅读重心留给下面的每日计划与类型时长。</p>
           </div>
-          <div className="panel-actions">
+          <div className="panel-actions admin-filter-row">
             <label className="field compact-field">
               <span>开始日期</span>
               <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
@@ -76,43 +67,35 @@ export function AdminPage() {
               <span>结束日期</span>
               <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
             </label>
-            <button className="primary-button" type="button" onClick={() => void loadOverview()}>
-              更新统计
-            </button>
           </div>
         </div>
 
-        <div className="stats-grid">
-          <article className="stat-card">
-            <BarChart3 size={20} />
-            <div className="stat-copy">
-              <span>已规划天数</span>
-              <strong>{overview?.plannedDays ?? 0}</strong>
-            </div>
-          </article>
-          <article className="stat-card">
-            <Clock3 size={20} />
-            <div className="stat-copy">
-              <span>专注总时长</span>
-              <strong>{formatMinutes(overview?.focusMinutes ?? 0)}</strong>
-            </div>
-          </article>
-          <article className="stat-card">
-            <CalendarRange size={20} />
-            <div className="stat-copy">
-              <span>休息总时长</span>
-              <strong>{formatMinutes(overview?.breakMinutes ?? 0)}</strong>
-            </div>
-          </article>
+        <div className="admin-summary-line">
+          <span className="admin-summary-pill">
+            <BarChart3 size={18} />
+            <strong>{overview?.plannedDays ?? 0}</strong>
+            已规划天数
+          </span>
+          <span className="admin-summary-pill">
+            <Clock3 size={18} />
+            <strong>{formatMinutes(overview?.focusMinutes ?? 0)}</strong>
+            专注总时长
+          </span>
+          <span className="admin-summary-pill">
+            <CalendarRange size={18} />
+            <strong>{formatMinutes(overview?.breakMinutes ?? 0)}</strong>
+            休息总时长
+          </span>
         </div>
       </section>
 
-      <section className="two-column-grid">
-        <article className="content-panel">
+      <section className="two-column-grid admin-layout">
+        <article className="content-panel focus-panel">
           <div className="panel-header">
             <div>
+              <p className="eyebrow">Daily</p>
               <h2>每日计划</h2>
-              <p>按天查看任务数量、首尾时间和当日重点。</p>
+              <p>这里作为主阅读区，集中查看每天的节奏、任务数量和重点任务。</p>
             </div>
           </div>
 
@@ -149,11 +132,12 @@ export function AdminPage() {
           </div>
         </article>
 
-        <aside className="content-panel">
+        <aside className="content-panel secondary-panel admin-side-panel">
           <div className="panel-header">
             <div>
+              <p className="eyebrow">Type Stats</p>
               <h2>类型时长统计</h2>
-              <p>聚合所有任务类型，看看精力主要花在哪里。</p>
+              <p>右侧只保留聚合信息，避免与每日计划列表抢主视线。</p>
             </div>
           </div>
 

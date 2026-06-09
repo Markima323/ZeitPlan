@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, PencilLine, Plus, Trash2 } from "lucide-react";
 import { toBlob } from "html-to-image";
 import { apiClient } from "../api/client";
 import type {
@@ -9,7 +9,18 @@ import type {
   SeasonMode,
   TaskTypeResponse,
 } from "../api/types";
-import { buildScheduleBlocks, formatMinutes, todayIsoDate } from "../lib/schedule";
+import {
+  BREAK_MINUTES,
+  buildScheduleBlocks,
+  buildTaskTimeline,
+  formatMinutes,
+  MIN_SLOT_DURATION_MINUTES,
+  normalizeSlotDuration,
+  parseClock,
+  resolveClockAtOrAfter,
+  todayIsoDate,
+  toClock,
+} from "../lib/schedule";
 import { TaskIcon } from "../lib/taskIcons";
 
 interface EditableTask extends PlanTaskResponse {
@@ -24,9 +35,23 @@ interface ResolvedPlanState {
 }
 
 type AutoSaveState = "idle" | "saving" | "saved" | "error";
+type PreviewTarget = "day" | "evening";
+
+const DAY_PREVIEW_START_MINUTES = 6 * 60;
+const DAY_PREVIEW_END_MINUTES = 17 * 60;
+const EVENING_PREVIEW_START_MINUTES = 17 * 60;
+const EVENING_PREVIEW_END_MINUTES = 3 * 60;
 
 function makeClientId() {
   return crypto.randomUUID();
+}
+
+function isWithinPreviewRange(minutes: number, rangeStartMinutes: number, rangeEndMinutes: number) {
+  if (rangeStartMinutes < rangeEndMinutes) {
+    return minutes >= rangeStartMinutes && minutes < rangeEndMinutes;
+  }
+
+  return minutes >= rangeStartMinutes || minutes < rangeEndMinutes;
 }
 
 function toEditableTasks(tasks: PlanTaskResponse[], resetTaskIds = false): EditableTask[] {
@@ -79,7 +104,9 @@ export function SchedulePage({
   seasonMode: SeasonMode;
   onSeasonSync: (value: SeasonMode) => void;
 }) {
-  const previewRef = useRef<HTMLDivElement | null>(null);
+  const dayPreviewRef = useRef<HTMLDivElement | null>(null);
+  const eveningPreviewRef = useRef<HTMLDivElement | null>(null);
+  const taskCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const lastAppliedSeasonRef = useRef<SeasonMode>(seasonMode);
   const saveVersionRef = useRef(0);
 
@@ -89,10 +116,11 @@ export function SchedulePage({
   const [taskTypes, setTaskTypes] = useState<TaskTypeResponse[]>([]);
   const [templateSourceDate, setTemplateSourceDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isCopying, setIsCopying] = useState(false);
+  const [copyingTarget, setCopyingTarget] = useState<PreviewTarget | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [autoSaveState, setAutoSaveState] = useState<AutoSaveState>("idle");
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
   function markDirty() {
     setIsDirty(true);
@@ -109,6 +137,7 @@ export function SchedulePage({
     setIsDirty(false);
     setIsLoading(true);
     setAutoSaveState("idle");
+    setExpandedTaskId(null);
   }
 
   useEffect(() => {
@@ -126,6 +155,7 @@ export function SchedulePage({
           setIsDirty(false);
           setAutoSaveState("idle");
           setFeedback(null);
+          setExpandedTaskId(null);
           onSeasonSync(resolvedPlan.plan.seasonMode);
           setIsLoading(false);
         }
@@ -211,10 +241,83 @@ export function SchedulePage({
     };
   }, [dayStartLocalTime, isDirty, onSeasonSync, seasonMode, selectedDate, tasks, isLoading]);
 
-  const schedule = useMemo(
-    () => buildScheduleBlocks(tasks, taskTypes, dayStartLocalTime, seasonMode),
-    [dayStartLocalTime, seasonMode, taskTypes, tasks],
+  const orderedTasks = useMemo(
+    () => [...tasks].sort((left, right) => left.orderIndex - right.orderIndex),
+    [tasks],
   );
+
+  const taskClientIdByOrderIndex = useMemo(
+    () => new Map(orderedTasks.map((task) => [task.orderIndex, task.clientId])),
+    [orderedTasks],
+  );
+
+  const taskTimeline = useMemo(() => buildTaskTimeline(orderedTasks, dayStartLocalTime), [dayStartLocalTime, orderedTasks]);
+
+  const schedule = useMemo(
+    () => buildScheduleBlocks(orderedTasks, taskTypes, dayStartLocalTime, seasonMode),
+    [dayStartLocalTime, orderedTasks, seasonMode, taskTypes],
+  );
+
+  const daytimePreviewBlocks = useMemo(
+    () =>
+      schedule.blocks.filter((block) =>
+        isWithinPreviewRange(parseClock(block.localStartTime), DAY_PREVIEW_START_MINUTES, DAY_PREVIEW_END_MINUTES),
+      ),
+    [schedule.blocks],
+  );
+
+  const eveningPreviewBlocks = useMemo(
+    () =>
+      schedule.blocks.filter((block) =>
+        isWithinPreviewRange(
+          parseClock(block.localStartTime),
+          EVENING_PREVIEW_START_MINUTES,
+          EVENING_PREVIEW_END_MINUTES,
+        ),
+      ),
+    [schedule.blocks],
+  );
+
+  function updateTaskByIndex(index: number, changes: Partial<EditableTask>) {
+    const task = orderedTasks[index];
+    if (!task) {
+      return;
+    }
+
+    updateTask(task.clientId, changes);
+  }
+
+  function updateTaskSlotDuration(index: number, minutes: number) {
+    updateTaskByIndex(index, {
+      durationMinutes: normalizeSlotDuration(minutes),
+    });
+  }
+
+  function updateTaskStartTime(index: number, nextTime: string) {
+    if (index === 0) {
+      setDayStartLocalTime(nextTime);
+      markDirty();
+      return;
+    }
+
+    const previousTimelineEntry = taskTimeline[index - 1];
+    if (!previousTimelineEntry) {
+      return;
+    }
+
+    const targetStartMinutes = resolveClockAtOrAfter(previousTimelineEntry.slotStartMinutes, nextTime);
+    updateTaskSlotDuration(index - 1, targetStartMinutes - BREAK_MINUTES - previousTimelineEntry.slotStartMinutes);
+  }
+
+  function updateTaskEndTime(index: number, nextTime: string) {
+    const timelineEntry = taskTimeline[index];
+    if (!timelineEntry) {
+      return;
+    }
+
+    const targetEndMinutes = resolveClockAtOrAfter(timelineEntry.slotStartMinutes, nextTime);
+    updateTaskSlotDuration(index, targetEndMinutes - timelineEntry.slotStartMinutes);
+  }
 
   function addTask(afterIndex: number) {
     const defaultTypeId = taskTypes[0]?.id ?? null;
@@ -235,6 +338,7 @@ export function SchedulePage({
         orderIndex: index,
       }));
     });
+    setExpandedTaskId(nextTask.clientId);
     markDirty();
   }
 
@@ -257,8 +361,42 @@ export function SchedulePage({
     markDirty();
   }
 
-  async function copyPreviewImage() {
-    if (!previewRef.current) {
+  function scrollToTaskEditor(taskOrderIndex: number | null) {
+    if (taskOrderIndex === null) {
+      return;
+    }
+
+    const clientId = taskClientIdByOrderIndex.get(taskOrderIndex);
+    if (!clientId) {
+      return;
+    }
+
+    setExpandedTaskId(clientId);
+
+    window.setTimeout(() => {
+      const card = taskCardRefs.current[clientId];
+      if (!card) {
+        return;
+      }
+
+      card.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      const titleInput = card.querySelector('input[type="text"]');
+      if (titleInput instanceof HTMLInputElement) {
+        titleInput.focus();
+        titleInput.select();
+      }
+    }, 120);
+  }
+
+  async function copyPreviewImage(target: PreviewTarget) {
+    const previewNode = target === "day" ? dayPreviewRef.current : eveningPreviewRef.current;
+    const previewLabel = target === "day" ? "白天日程图" : "夜间日程图";
+
+    if (!previewNode) {
       return;
     }
 
@@ -267,11 +405,11 @@ export function SchedulePage({
       return;
     }
 
-    setIsCopying(true);
+    setCopyingTarget(target);
     setFeedback(null);
 
     try {
-      const blob = await toBlob(previewRef.current, {
+      const blob = await toBlob(previewNode, {
         backgroundColor: "#fffaf2",
         pixelRatio: 2,
       });
@@ -286,11 +424,11 @@ export function SchedulePage({
         }),
       ]);
 
-      setFeedback("日程图片已复制到剪贴板");
+      setFeedback(`${previewLabel}已复制到剪贴板`);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "复制失败");
     } finally {
-      setIsCopying(false);
+      setCopyingTarget(null);
     }
   }
 
@@ -303,16 +441,19 @@ export function SchedulePage({
           ? "自动保存失败"
           : "修改后将自动保存";
 
+  const plannerSummaryLine = `${selectedDate} · ${tasks.length} 个任务 · 专注 ${formatMinutes(schedule.focusMinutes)} · 休息 ${formatMinutes(schedule.breakMinutes)}`;
+
   return (
     <div className="page-stack">
       {feedback ? <div className="feedback-banner">{feedback}</div> : null}
 
-      <section className="planner-layout">
-        <article className="editor-panel">
+      <section className="planner-layout planner-focus-layout">
+        <article className="editor-panel focus-panel">
           <div className="panel-header">
             <div>
+              <p className="eyebrow">Planner</p>
               <h2>任务编辑器</h2>
-              <p>默认从今天开始。如果今天还没有计划，会自动载入上一份计划作为修改模板。</p>
+              <p>先确定当天的节奏，再逐项微调任务，右侧预览只保留辅助参考。</p>
             </div>
             <span className="autosave-indicator">{autoSaveText}</span>
           </div>
@@ -332,7 +473,7 @@ export function SchedulePage({
               <span>首个任务开始</span>
               <input
                 type="time"
-                step={1800}
+                step={300}
                 value={dayStartLocalTime}
                 onChange={(event) => {
                   setDayStartLocalTime(event.target.value);
@@ -340,6 +481,10 @@ export function SchedulePage({
                 }}
               />
             </label>
+          </div>
+
+          <div className="planner-summary-line">
+            <span>{plannerSummaryLine}</span>
           </div>
 
           {templateSourceDate ? (
@@ -369,78 +514,161 @@ export function SchedulePage({
             ) : null}
 
             {!isLoading
-              ? tasks.map((task, index) => (
-                  <div key={task.clientId}>
-                    <div className="task-card">
-                      <button
-                        className="trash-button"
-                        type="button"
-                        aria-label="删除任务"
-                        onClick={() => removeTask(task.clientId)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
+              ? orderedTasks.map((task, index) => {
+                  const timelineEntry = taskTimeline[index];
+                  const isExpanded = expandedTaskId === task.clientId;
 
-                      <div className="task-card-grid">
-                        <label className="field field-span-2">
-                          <span>任务内容</span>
-                          <input
-                            type="text"
-                            value={task.title}
-                            placeholder="例如：复盘昨日数据、写 PRD、录音练习"
-                            onChange={(event) => updateTask(task.clientId, { title: event.target.value })}
-                          />
-                        </label>
-
-                        <label className="field">
-                          <span>任务类型</span>
-                          <select
-                            value={task.taskTypeId ?? ""}
-                            onChange={(event) =>
-                              updateTask(task.clientId, {
-                                taskTypeId: event.target.value ? Number(event.target.value) : null,
-                              })
-                            }
+                  return (
+                    <div
+                      key={task.clientId}
+                      ref={(node) => {
+                        if (node) {
+                          taskCardRefs.current[task.clientId] = node;
+                        } else {
+                          delete taskCardRefs.current[task.clientId];
+                        }
+                      }}
+                    >
+                      <div className="task-card">
+                        <div className="task-card-toolbar">
+                          <button
+                            className={isExpanded ? "ghost-icon-button active" : "ghost-icon-button"}
+                            type="button"
+                            aria-label={isExpanded ? "收起高级编辑" : "打开高级编辑"}
+                            onClick={() => setExpandedTaskId((current) => (current === task.clientId ? null : task.clientId))}
                           >
-                            {taskTypes.length === 0 ? <option value="">请先创建类型</option> : null}
-                            {taskTypes.map((type) => (
-                              <option key={type.id} value={type.id}>
-                                {type.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                            <PencilLine size={16} />
+                          </button>
+                        </div>
 
-                        <div className="field">
-                          <span>时长</span>
-                          <div className="duration-switch">
-                            {[30, 60].map((minutes) => (
-                              <button
-                                key={minutes}
-                                type="button"
-                                className={task.durationMinutes === minutes ? "active" : ""}
-                                onClick={() =>
-                                  updateTask(task.clientId, {
-                                    durationMinutes: minutes as 30 | 60,
-                                  })
-                                }
-                              >
-                                {minutes === 30 ? "半小时" : "1 小时"}
-                              </button>
-                            ))}
+                        <button
+                          className="trash-button"
+                          type="button"
+                          aria-label="删除任务"
+                          onClick={() => removeTask(task.clientId)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+
+                        <div className="task-card-grid">
+                          <label className="field field-span-2">
+                            <span>任务内容</span>
+                            <input
+                              type="text"
+                              value={task.title}
+                              placeholder="例如：复盘昨日数据、写 PRD、录音练习"
+                              onChange={(event) => updateTask(task.clientId, { title: event.target.value })}
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span>任务类型</span>
+                            <select
+                              value={task.taskTypeId ?? ""}
+                              onChange={(event) =>
+                                updateTask(task.clientId, {
+                                  taskTypeId: event.target.value ? Number(event.target.value) : null,
+                                })
+                              }
+                            >
+                              {taskTypes.length === 0 ? <option value="">请先创建类型</option> : null}
+                              {taskTypes.map((type) => (
+                                <option key={type.id} value={type.id}>
+                                  {type.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <div className="field">
+                            <span>时段时长</span>
+                            <div className="duration-switch">
+                              {[30, 60].map((minutes) => (
+                                <button
+                                  key={minutes}
+                                  type="button"
+                                  className={task.durationMinutes === minutes ? "active" : ""}
+                                  onClick={() => updateTaskSlotDuration(index, minutes)}
+                                >
+                                  {minutes === 30 ? "半小时" : "1 小时"}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="field">
+                            <span>当前时间</span>
+                            <div className="task-time-chip">
+                              {timelineEntry
+                                ? `${toClock(timelineEntry.taskStartMinutes)} - ${toClock(timelineEntry.taskEndMinutes)}`
+                                : "--:--"}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <button className="insert-handle" type="button" onClick={() => addTask(index)}>
-                      <span className="insert-line" />
-                      <span className="insert-plus">
-                        <Plus size={18} />
-                      </span>
-                    </button>
-                  </div>
-                ))
+                        {timelineEntry ? (
+                          <p className="task-detail-note">
+                            {timelineEntry.hasBreakBefore
+                              ? `本任务前固定保留 ${BREAK_MINUTES} 分钟休息，当前专注 ${formatMinutes(timelineEntry.focusMinutes)}，整个时段 ${formatMinutes(task.durationMinutes)}。修改开始时间时会联动前一个时段。`
+                              : `当前专注 ${formatMinutes(timelineEntry.focusMinutes)}。`}
+                          </p>
+                        ) : null}
+
+                        {isExpanded && timelineEntry ? (
+                          <div className="task-advanced-grid">
+                            <label className="field">
+                              <span>开始时间</span>
+                              <input
+                                type="time"
+                                step={300}
+                                value={toClock(timelineEntry.taskStartMinutes)}
+                                min={
+                                  index > 0
+                                    ? toClock(
+                                        taskTimeline[index - 1].slotStartMinutes +
+                                          MIN_SLOT_DURATION_MINUTES +
+                                          BREAK_MINUTES,
+                                      )
+                                    : undefined
+                                }
+                                onChange={(event) => updateTaskStartTime(index, event.target.value)}
+                              />
+                            </label>
+
+                            <label className="field">
+                              <span>结束时间</span>
+                              <input
+                                type="time"
+                                step={300}
+                                value={toClock(timelineEntry.taskEndMinutes)}
+                                onChange={(event) => updateTaskEndTime(index, event.target.value)}
+                              />
+                            </label>
+
+                            <label className="field">
+                              <span>自定义时长（分钟）</span>
+                              <input
+                                type="number"
+                                min={MIN_SLOT_DURATION_MINUTES}
+                                max={1440}
+                                step={5}
+                                value={task.durationMinutes}
+                                onChange={(event) => updateTaskSlotDuration(index, Number(event.target.value))}
+                              />
+                            </label>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <button className="insert-handle" type="button" onClick={() => addTask(index)}>
+                        <span className="insert-line" />
+                        <span className="insert-plus">
+                          <Plus size={18} />
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })
               : null}
           </div>
 
@@ -451,98 +679,182 @@ export function SchedulePage({
           ) : null}
         </article>
 
-        <aside className="preview-panel">
+        <aside className="preview-panel secondary-panel planner-preview-panel">
           <div className="panel-header">
             <div>
+              <p className="eyebrow">Preview</p>
               <h2>日程预览</h2>
-              <p>复制按钮会把右侧这张卡片生成图片并写入剪贴板。</p>
+              <p>这里保持轻量，负责导出白天/夜间两张表；双击任务行还能直接跳到左侧编辑器。</p>
             </div>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => void copyPreviewImage()}
-              disabled={isCopying || isLoading}
-            >
-              <Copy size={16} />
-              {isCopying ? "生成中..." : "复制图片"}
-            </button>
-          </div>
-
-          <div className="summary-strip">
-            <div className="summary-chip">
-              <span>专注时长</span>
-              <strong>{formatMinutes(schedule.focusMinutes)}</strong>
-            </div>
-            <div className="summary-chip">
-              <span>休息总计</span>
-              <strong>{formatMinutes(schedule.breakMinutes)}</strong>
-            </div>
-            <div className="summary-chip">
-              <span>任务数量</span>
-              <strong>{tasks.length}</strong>
+            <div className="panel-actions preview-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void copyPreviewImage("day")}
+                disabled={copyingTarget !== null || isLoading || daytimePreviewBlocks.length === 0}
+              >
+                <Copy size={16} />
+                {copyingTarget === "day" ? "生成中..." : "复制白天图"}
+              </button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => void copyPreviewImage("evening")}
+                disabled={copyingTarget !== null || isLoading || eveningPreviewBlocks.length === 0}
+              >
+                <Copy size={16} />
+                {copyingTarget === "evening" ? "生成中..." : "复制夜间图"}
+              </button>
             </div>
           </div>
 
-          <div ref={previewRef} className="schedule-card">
-            <div className="schedule-card-head">
-              <div>
-                <p className="eyebrow">ZeitPlan</p>
-                <h3>{selectedDate} 日计划</h3>
+          <div className="preview-summary-line">
+            <span>{plannerSummaryLine}</span>
+          </div>
+
+          <div className="preview-stack">
+            <div ref={dayPreviewRef} className="schedule-card planner-preview-card">
+              <div className="schedule-card-head">
+                <div>
+                  <p className="eyebrow">ZeitPlan</p>
+                  <h3>{selectedDate} 日计划</h3>
+                  <p className="preview-card-caption">德国 06:00-17:00 · 本地时间 / 北京时间对照</p>
+                </div>
+              </div>
+
+              <div className="table-shell">
+                <table className="schedule-table">
+                  <thead>
+                    <tr>
+                      <th>本地开始</th>
+                      <th>本地结束</th>
+                      <th>北京开始</th>
+                      <th>北京结束</th>
+                      <th>任务内容</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan={5} className="table-empty">
+                          正在加载这一天的计划...
+                        </td>
+                      </tr>
+                    ) : null}
+                    {!isLoading
+                      ? daytimePreviewBlocks.map((block) => (
+                          <tr
+                            key={block.id}
+                            className={[
+                              block.breakBlock ? "break-row" : "",
+                              block.editable ? "preview-task-row" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            title={block.editable ? "双击跳转到左侧任务编辑器" : undefined}
+                            onDoubleClick={() => scrollToTaskEditor(block.taskOrderIndex)}
+                          >
+                            <td>{block.localStartTime}</td>
+                            <td>{block.localEndTime}</td>
+                            <td>{block.beijingStartTime}</td>
+                            <td>{block.beijingEndTime}</td>
+                            <td>
+                              <span className="task-cell">
+                                <span
+                                  className="task-icon-wrap"
+                                  style={{ backgroundColor: block.breakBlock ? "#FFF5E8" : `${block.typeColor}22` }}
+                                >
+                                  <TaskIcon iconKey={block.typeIcon} className="task-icon" />
+                                </span>
+                                <span>
+                                  <strong>{block.title}</strong>
+                                  <small>{block.typeName}</small>
+                                </span>
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      : null}
+                    {!isLoading && daytimePreviewBlocks.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="table-empty">
+                          06:00 到 17:00 之间还没有可导出的任务。
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
               </div>
             </div>
 
-            <div className="table-shell">
-              <table className="schedule-table">
-                <thead>
-                  <tr>
-                    <th>本地开始</th>
-                    <th>本地结束</th>
-                    <th>北京开始</th>
-                    <th>北京结束</th>
-                    <th>任务内容</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoading ? (
+            <div ref={eveningPreviewRef} className="schedule-card planner-preview-card night-preview-card">
+              <div className="schedule-card-head">
+                <div>
+                  <p className="eyebrow">ZeitPlan</p>
+                  <h3>{selectedDate} 夜间计划</h3>
+                  <p className="preview-card-caption">德国 17:00-03:00 · 仅显示德国本地时间</p>
+                </div>
+              </div>
+
+              <div className="table-shell">
+                <table className="schedule-table">
+                  <thead>
                     <tr>
-                      <td colSpan={5} className="table-empty">
-                        正在加载这一天的计划...
-                      </td>
+                      <th>本地开始</th>
+                      <th>本地结束</th>
+                      <th>任务内容</th>
                     </tr>
-                  ) : null}
-                  {!isLoading
-                    ? schedule.blocks.map((block) => (
-                        <tr key={block.id} className={block.breakBlock ? "break-row" : ""}>
-                          <td>{block.localStartTime}</td>
-                          <td>{block.localEndTime}</td>
-                          <td>{block.beijingStartTime}</td>
-                          <td>{block.beijingEndTime}</td>
-                          <td>
-                            <span className="task-cell">
-                              <span
-                                className="task-icon-wrap"
-                                style={{ backgroundColor: block.breakBlock ? "#FFF5E8" : `${block.typeColor}22` }}
-                              >
-                                <TaskIcon iconKey={block.typeIcon} className="task-icon" />
+                  </thead>
+                  <tbody>
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan={3} className="table-empty">
+                          正在加载这一天的计划...
+                        </td>
+                      </tr>
+                    ) : null}
+                    {!isLoading
+                      ? eveningPreviewBlocks.map((block) => (
+                          <tr
+                            key={block.id}
+                            className={[
+                              block.breakBlock ? "break-row" : "",
+                              block.editable ? "preview-task-row" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            title={block.editable ? "双击跳转到左侧任务编辑器" : undefined}
+                            onDoubleClick={() => scrollToTaskEditor(block.taskOrderIndex)}
+                          >
+                            <td>{block.localStartTime}</td>
+                            <td>{block.localEndTime}</td>
+                            <td>
+                              <span className="task-cell">
+                                <span
+                                  className="task-icon-wrap"
+                                  style={{ backgroundColor: block.breakBlock ? "#FFF5E8" : `${block.typeColor}22` }}
+                                >
+                                  <TaskIcon iconKey={block.typeIcon} className="task-icon" />
+                                </span>
+                                <span>
+                                  <strong>{block.title}</strong>
+                                  <small>{block.typeName}</small>
+                                </span>
                               </span>
-                              <span>
-                                <strong>{block.title}</strong>
-                                <small>{block.typeName}</small>
-                              </span>
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    : null}
-                  {!isLoading && schedule.blocks.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="table-empty">
-                        还没有任务，左侧添加后这里会自动生成完整时间表。
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+                            </td>
+                          </tr>
+                        ))
+                      : null}
+                    {!isLoading && eveningPreviewBlocks.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="table-empty">
+                          17:00 到次日 03:00 之间还没有可导出的任务。
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </aside>

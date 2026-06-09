@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
-import { CalendarDays, Dice5, LayoutDashboard, Shapes } from "lucide-react";
+import { CalendarDays, Dice5, House, LayoutDashboard, Shapes } from "lucide-react";
 import type { SeasonMode } from "./api/types";
 import { AdminPage } from "./pages/AdminPage";
 import { DicePage } from "./pages/DicePage";
 import { SchedulePage } from "./pages/SchedulePage";
 import { TaskTypesPage } from "./pages/TaskTypesPage";
+import { TodayPlanPage } from "./pages/TodayPlanPage";
 
 function AppLayout({
   seasonMode,
@@ -23,12 +24,16 @@ function AppLayout({
           <span className="brand-mark">Z</span>
           <div>
             <strong>ZeitPlan</strong>
-            <p>德国本地 / 北京时间联动日程</p>
+            <p>德国本地 / 北京时间 · {seasonMode === "SUMMER" ? "夏令时" : "冬令时"}</p>
           </div>
         </div>
 
         <nav className="nav-links">
           <NavLink to="/" end>
+            <House size={16} />
+            今日计划
+          </NavLink>
+          <NavLink to="/planner">
             <CalendarDays size={16} />
             日程规划
           </NavLink>
@@ -48,8 +53,7 @@ function AppLayout({
 
         <div className="season-menu">
           <button className="season-trigger" type="button">
-            时差模式
-            <strong>{seasonMode === "SUMMER" ? "夏令时" : "冬令时"}</strong>
+            切换时差
           </button>
           <div className="season-dropdown">
             <button type="button" onClick={() => onSeasonChange("SUMMER")}>
@@ -76,7 +80,8 @@ export default function App() {
     <BrowserRouter>
       <AppLayout seasonMode={seasonMode} onSeasonChange={setSeasonMode}>
         <Routes>
-          <Route path="/" element={<SchedulePage seasonMode={seasonMode} onSeasonSync={setSeasonMode} />} />
+          <Route path="/" element={<TodayPlanPage seasonMode={seasonMode} onSeasonSync={setSeasonMode} />} />
+          <Route path="/planner" element={<SchedulePage seasonMode={seasonMode} onSeasonSync={setSeasonMode} />} />
           <Route path="/types" element={<TaskTypesPage />} />
           <Route path="/dashboard" element={<AdminPage />} />
           <Route path="/dice" element={<DicePage />} />

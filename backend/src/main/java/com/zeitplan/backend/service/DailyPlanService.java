@@ -25,6 +25,8 @@ import java.util.Optional;
 @Service
 public class DailyPlanService {
 
+    private static final int BREAK_MINUTES = 5;
+
     private final DailyPlanRepository dailyPlanRepository;
     private final TaskTypeRepository taskTypeRepository;
 
@@ -52,7 +54,7 @@ public class DailyPlanService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "路径日期和请求体中的计划日期不一致");
         }
 
-        validateHalfHour(request.dayStartLocalTime());
+        validateFiveMinuteStep(request.dayStartLocalTime());
 
         DailyPlanEntity entity = dailyPlanRepository.findByPlanDate(pathDate)
                 .orElseGet(DailyPlanEntity::new);
@@ -100,14 +102,14 @@ public class DailyPlanService {
     }
 
     private void validateDuration(Integer durationMinutes) {
-        if (durationMinutes == null || (durationMinutes != 30 && durationMinutes != 60)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "任务时长只能是 30 分钟或 60 分钟");
+        if (durationMinutes == null || durationMinutes < 10 || durationMinutes > 1440 || durationMinutes % BREAK_MINUTES != 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "任务时长需要是 10 到 1440 分钟之间的 5 分钟整数倍");
         }
     }
 
-    private void validateHalfHour(LocalTime time) {
-        if (time.getMinute() != 0 && time.getMinute() != 30) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "开始时间只能选择整点或半点");
+    private void validateFiveMinuteStep(LocalTime time) {
+        if (time.getMinute() % BREAK_MINUTES != 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "开始时间需要按 5 分钟为单位设置");
         }
     }
 }

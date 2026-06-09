@@ -8,7 +8,7 @@ public record PlanTaskRequest(
         Long id,
         @Size(max = 240) String title,
         Long taskTypeId,
-        @Min(30) @Max(60) Integer durationMinutes,
+        @Min(10) @Max(1440) Integer durationMinutes,
         Integer orderIndex
 ) {
 }

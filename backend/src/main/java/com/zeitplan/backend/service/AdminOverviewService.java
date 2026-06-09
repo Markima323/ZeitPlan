@@ -21,6 +21,7 @@ import java.util.Map;
 @Service
 public class AdminOverviewService {
 
+    private static final int BREAK_MINUTES = 5;
     private static final String FALLBACK_NAME = "未分类";
     private static final String FALLBACK_ICON = "sparkles";
     private static final String FALLBACK_COLOR = "#F47B20";
@@ -45,29 +46,45 @@ public class AdminOverviewService {
         int breakMinutes = 0;
 
         for (DailyPlanEntity plan : plans) {
-            int dayFocusMinutes = plan.getTasks().stream().mapToInt(PlanTaskEntity::getDurationMinutes).sum();
-            int dayBreakMinutes = Math.max(plan.getTasks().size() - 1, 0) * 5;
+            List<PlanTaskEntity> sortedTasks = plan.getTasks().stream()
+                    .sorted(Comparator.comparing(PlanTaskEntity::getOrderIndex))
+                    .toList();
+
+            int dayFocusMinutes = 0;
+            int daySlotMinutes = 0;
+            for (int index = 0; index < sortedTasks.size(); index++) {
+                PlanTaskEntity task = sortedTasks.get(index);
+                daySlotMinutes += task.getDurationMinutes();
+                dayFocusMinutes += index == 0
+                        ? task.getDurationMinutes()
+                        : Math.max(task.getDurationMinutes() - BREAK_MINUTES, 0);
+            }
+
+            int dayBreakMinutes = Math.max(sortedTasks.size() - 1, 0) * BREAK_MINUTES;
             focusMinutes += dayFocusMinutes;
             breakMinutes += dayBreakMinutes;
 
             LocalTime lastTime = null;
-            if (!plan.getTasks().isEmpty()) {
-                int totalMinutes = dayFocusMinutes + dayBreakMinutes;
-                lastTime = plan.getDayStartLocalTime().plusMinutes(totalMinutes);
+            if (!sortedTasks.isEmpty()) {
+                lastTime = plan.getDayStartLocalTime().plusMinutes(daySlotMinutes);
             }
 
             daySummaries.add(new DailyPlanSummaryResponse(
                     plan.getPlanDate(),
                     plan.getSeasonMode(),
-                    plan.getTasks().size(),
+                    sortedTasks.size(),
                     dayFocusMinutes,
                     dayBreakMinutes,
-                    plan.getTasks().isEmpty() ? null : plan.getDayStartLocalTime(),
+                    sortedTasks.isEmpty() ? null : plan.getDayStartLocalTime(),
                     lastTime,
-                    plan.getTasks().stream().limit(3).map(PlanTaskEntity::getTitle).toList()
+                    sortedTasks.stream().limit(3).map(PlanTaskEntity::getTitle).toList()
             ));
 
-            for (PlanTaskEntity task : plan.getTasks()) {
+            for (int index = 0; index < sortedTasks.size(); index++) {
+                PlanTaskEntity task = sortedTasks.get(index);
+                int actualFocusMinutes = index == 0
+                        ? task.getDurationMinutes()
+                        : Math.max(task.getDurationMinutes() - BREAK_MINUTES, 0);
                 TaskTypeEntity taskType = task.getTaskType();
                 String key = taskType != null ? taskType.getId().toString() : "fallback";
                 stats.computeIfAbsent(
@@ -78,7 +95,7 @@ public class AdminOverviewService {
                                         taskType != null ? taskType.getIconKey() : FALLBACK_ICON,
                                         taskType != null ? taskType.getColorHex() : FALLBACK_COLOR
                                 ))
-                        .add(task.getDurationMinutes());
+                        .add(actualFocusMinutes);
             }
         }
 
