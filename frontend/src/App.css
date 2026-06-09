@@ -22,6 +22,84 @@ body {
     linear-gradient(180deg, #fffaf2 0%, var(--page-bg) 100%);
 }
 
+body,
+input,
+select,
+button,
+textarea,
+td,
+p,
+small {
+  line-height: 1.65;
+}
+
+body,
+input,
+select,
+textarea,
+td,
+p,
+small {
+  font-weight: 500;
+}
+
+h1,
+h2,
+h3,
+h4,
+strong,
+.brand-block strong,
+.nav-links a,
+.season-trigger,
+.season-dropdown button,
+.panel-header h2,
+.primary-button,
+.secondary-button,
+.ghost-button,
+.large-button,
+.autosave-indicator,
+.field span,
+.task-time-chip,
+.badge-soft,
+.admin-summary-pill,
+.dice-status-pill,
+.break-pill,
+.today-summary-line,
+.next-task-kicker,
+.schedule-table th {
+  font-weight: 700;
+}
+
+.today-title,
+.next-task-title,
+.schedule-card-head h3,
+.die-value,
+.page-hero h1 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.hero-copy,
+.panel-header p,
+.brand-block p,
+.today-meta,
+.next-task-time,
+.task-detail-note,
+.preview-card-caption,
+.soft-warning,
+.feedback-banner,
+.info-banner {
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.season-dropdown small,
+.task-cell small,
+.history-meta small {
+  font-weight: 600;
+}
+
 a {
   color: inherit;
   text-decoration: none;
