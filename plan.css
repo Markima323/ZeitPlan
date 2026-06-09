@@ -1,0 +1,244 @@
+:root {
+  --page-bg: #fff8ef;
+  --card-bg: rgba(255, 255, 255, 0.86);
+  --header-bg: rgba(255, 244, 229, 0.68);
+  --line: rgba(217, 178, 125, 0.28);
+  --text: #2a2119;
+  --muted: #6c5c4b;
+  --accent: #f47b20;
+  --accent-dark: #a35a0b;
+  --highlight-bg: rgba(255, 224, 183, 0.5);
+  --shadow: 0 22px 60px rgba(142, 91, 36, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 217, 166, 0.38), transparent 34%),
+    linear-gradient(180deg, #fffaf2 0%, var(--page-bg) 100%);
+}
+
+.daily-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.daily-container {
+  width: min(1180px, 100%);
+}
+
+.daily-title {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(34px, 4vw, 54px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--accent-dark);
+}
+
+.title-line {
+  width: 58px;
+  height: 5px;
+  margin: 18px auto 34px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff9a3d, #f47b20);
+}
+
+.schedule-card {
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--card-bg);
+  border: 1px solid rgba(238, 199, 151, 0.62);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.schedule-table th {
+  height: 92px;
+  padding: 0 56px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  color: var(--text);
+  font-size: 25px;
+  font-weight: 750;
+  text-align: left;
+}
+
+.schedule-table th:last-child,
+.schedule-table td:last-child {
+  border-right: none;
+}
+
+.th-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.schedule-table td {
+  height: 82px;
+  padding: 0 76px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  font-size: 25px;
+  font-weight: 500;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.schedule-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.schedule-table td:nth-child(1),
+.schedule-table td:nth-child(2) {
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.schedule-table td:nth-child(3) {
+  padding-left: 64px;
+}
+
+.icon {
+  width: 28px;
+  height: 28px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.task-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 28px;
+  white-space: nowrap;
+}
+
+.highlight-row td {
+  background: var(--highlight-bg);
+  color: #d85f08;
+  font-weight: 560;
+}
+
+.highlight-row .icon {
+  color: #f47b20;
+}
+
+@media (max-width: 900px) {
+  .daily-page {
+    padding: 32px 16px;
+  }
+
+  .schedule-table th,
+  .schedule-table td {
+    padding-left: 24px;
+    padding-right: 24px;
+    font-size: 18px;
+  }
+
+  .schedule-table th {
+    height: 72px;
+  }
+
+  .schedule-table td {
+    height: 68px;
+  }
+
+  .schedule-table td:nth-child(3) {
+    padding-left: 28px;
+  }
+
+  .task-cell {
+    gap: 14px;
+  }
+
+  .icon {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+@media (max-width: 640px) {
+  .schedule-card {
+    border-radius: 16px;
+  }
+
+  .schedule-table,
+  .schedule-table thead,
+  .schedule-table tbody,
+  .schedule-table tr,
+  .schedule-table th,
+  .schedule-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .schedule-table thead {
+    display: none;
+  }
+
+  .schedule-table tr {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .schedule-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .schedule-table td {
+    height: auto;
+    padding: 6px 0;
+    border: none;
+    text-align: left !important;
+    font-size: 17px;
+  }
+
+  .schedule-table td::before {
+    display: inline-block;
+    width: 82px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .schedule-table td:nth-child(1)::before {
+    content: "本地时间";
+  }
+
+  .schedule-table td:nth-child(2)::before {
+    content: "北京时间";
+  }
+
+  .schedule-table td:nth-child(3)::before {
+    content: "任务";
+  }
+
+  .task-cell {
+    display: inline-flex;
+    gap: 10px;
+  }
+}
