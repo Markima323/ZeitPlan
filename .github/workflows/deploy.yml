@@ -11,12 +11,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Validate deploy secrets
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_DEPLOY_PATH: ${{ secrets.HETZNER_DEPLOY_PATH }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          test -n "$HETZNER_HOST" || (echo "Missing secret: HETZNER_HOST" && exit 1)
+          test -n "$HETZNER_USER" || (echo "Missing secret: HETZNER_USER" && exit 1)
+          test -n "$HETZNER_DEPLOY_PATH" || (echo "Missing secret: HETZNER_DEPLOY_PATH" && exit 1)
+          test -n "$HETZNER_SSH_KEY" || (echo "Missing secret: HETZNER_SSH_KEY" && exit 1)
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HETZNER_HOST }}
+          port: 22
           username: ${{ secrets.HETZNER_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
+          passphrase: ${{ secrets.HETZNER_SSH_PASSPHRASE }}
+          script_stop: true
           script: |
             cd ${{ secrets.HETZNER_DEPLOY_PATH }}
             git pull --ff-only
