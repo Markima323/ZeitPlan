@@ -11,7 +11,6 @@ public record DailyPlanSummaryResponse(
         SeasonMode seasonMode,
         int taskCount,
         int focusMinutes,
-        int breakMinutes,
         LocalTime firstLocalStartTime,
         LocalTime lastLocalEndTime,
         List<String> highlightTasks

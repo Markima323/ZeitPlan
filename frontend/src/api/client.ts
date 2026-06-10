@@ -1,5 +1,6 @@
 import type {
   AdminOverviewResponse,
+  AuthSessionResponse,
   DailyPlanPayload,
   DailyPlanResponse,
   DicePhase,
@@ -9,6 +10,7 @@ import type {
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+export const AUTH_REQUIRED_EVENT = "zeitplan:auth-required";
 
 class ApiError extends Error {
   status: number;
@@ -19,14 +21,23 @@ class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  options?: { suppressAuthEvent?: boolean },
+): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
+    credentials: "include",
     ...init,
   });
+
+  if (response.status === 401 && !options?.suppressAuthEvent) {
+    window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+  }
 
   if (response.status === 204) {
     return undefined as T;
@@ -43,6 +54,34 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const apiClient = {
+  getSession() {
+    return request<AuthSessionResponse>("/auth/session", undefined, {
+      suppressAuthEvent: true,
+    });
+  },
+  login(password: string) {
+    return request<AuthSessionResponse>(
+      "/auth/session",
+      {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      },
+      {
+        suppressAuthEvent: true,
+      },
+    );
+  },
+  logout() {
+    return request<void>(
+      "/auth/session",
+      {
+        method: "DELETE",
+      },
+      {
+        suppressAuthEvent: true,
+      },
+    );
+  },
   getTaskTypes() {
     return request<TaskTypeResponse[]>("/task-types");
   },
@@ -56,6 +95,12 @@ export const apiClient = {
     return request<TaskTypeResponse>(`/task-types/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
+    });
+  },
+  reorderTaskTypes(taskTypeIds: number[]) {
+    return request<TaskTypeResponse[]>("/task-types/order", {
+      method: "PUT",
+      body: JSON.stringify({ taskTypeIds }),
     });
   },
   deleteTaskType(id: number) {

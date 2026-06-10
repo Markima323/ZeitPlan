@@ -7,6 +7,7 @@ import com.zeitplan.backend.entity.DailyPlanEntity;
 import com.zeitplan.backend.entity.PlanTaskEntity;
 import com.zeitplan.backend.entity.TaskTypeEntity;
 import com.zeitplan.backend.repository.DailyPlanRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,9 +23,9 @@ import java.util.Map;
 public class AdminOverviewService {
 
     private static final int BREAK_MINUTES = 5;
-    private static final String FALLBACK_NAME = "未分类";
-    private static final String FALLBACK_ICON = "sparkles";
-    private static final String FALLBACK_COLOR = "#F47B20";
+    private static final LocalTime SKIPPED_BREAK_START_TIME = LocalTime.of(14, 0);
+    private static final LocalTime EVENING_PLAN_START_TIME = LocalTime.of(17, 0);
+    private static final LocalTime EVENING_PLAN_END_TIME = LocalTime.of(3, 0);
 
     private final DailyPlanRepository dailyPlanRepository;
 
@@ -35,15 +36,14 @@ public class AdminOverviewService {
     @Transactional(readOnly = true)
     public AdminOverviewResponse getOverview(LocalDate fromDate, LocalDate toDate) {
         if (toDate.isBefore(fromDate)) {
-            throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "结束日期不能早于开始日期");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "结束日期不能早于开始日期");
         }
 
         List<DailyPlanEntity> plans = dailyPlanRepository.findAllByPlanDateBetweenOrderByPlanDateAsc(fromDate, toDate);
         List<DailyPlanSummaryResponse> daySummaries = new ArrayList<>();
-        Map<String, StatAccumulator> stats = new LinkedHashMap<>();
+        Map<Long, StatAccumulator> stats = new LinkedHashMap<>();
 
         int focusMinutes = 0;
-        int breakMinutes = 0;
 
         for (DailyPlanEntity plan : plans) {
             List<PlanTaskEntity> sortedTasks = plan.getTasks().stream()
@@ -52,50 +52,51 @@ public class AdminOverviewService {
 
             int dayFocusMinutes = 0;
             int daySlotMinutes = 0;
+            LocalTime cursor = plan.getDayStartLocalTime();
+
             for (int index = 0; index < sortedTasks.size(); index++) {
                 PlanTaskEntity task = sortedTasks.get(index);
+                int actualFocusMinutes = Math.max(task.getDurationMinutes() - getAutomaticBreakMinutes(index, cursor), 0);
+                if (isFocusTask(task.getTaskType())) {
+                    dayFocusMinutes += actualFocusMinutes;
+                }
                 daySlotMinutes += task.getDurationMinutes();
-                dayFocusMinutes += index == 0
-                        ? task.getDurationMinutes()
-                        : Math.max(task.getDurationMinutes() - BREAK_MINUTES, 0);
+                cursor = cursor.plusMinutes(task.getDurationMinutes());
             }
 
-            int dayBreakMinutes = Math.max(sortedTasks.size() - 1, 0) * BREAK_MINUTES;
             focusMinutes += dayFocusMinutes;
-            breakMinutes += dayBreakMinutes;
 
-            LocalTime lastTime = null;
-            if (!sortedTasks.isEmpty()) {
-                lastTime = plan.getDayStartLocalTime().plusMinutes(daySlotMinutes);
-            }
+            LocalTime lastTime = sortedTasks.isEmpty()
+                    ? null
+                    : plan.getDayStartLocalTime().plusMinutes(daySlotMinutes);
 
             daySummaries.add(new DailyPlanSummaryResponse(
                     plan.getPlanDate(),
                     plan.getSeasonMode(),
                     sortedTasks.size(),
                     dayFocusMinutes,
-                    dayBreakMinutes,
                     sortedTasks.isEmpty() ? null : plan.getDayStartLocalTime(),
                     lastTime,
                     sortedTasks.stream().limit(3).map(PlanTaskEntity::getTitle).toList()
             ));
 
+            cursor = plan.getDayStartLocalTime();
             for (int index = 0; index < sortedTasks.size(); index++) {
                 PlanTaskEntity task = sortedTasks.get(index);
-                int actualFocusMinutes = index == 0
-                        ? task.getDurationMinutes()
-                        : Math.max(task.getDurationMinutes() - BREAK_MINUTES, 0);
                 TaskTypeEntity taskType = task.getTaskType();
-                String key = taskType != null ? taskType.getId().toString() : "fallback";
-                stats.computeIfAbsent(
-                                key,
-                                ignored -> new StatAccumulator(
-                                        taskType != null ? taskType.getId() : null,
-                                        taskType != null ? taskType.getName() : FALLBACK_NAME,
-                                        taskType != null ? taskType.getIconKey() : FALLBACK_ICON,
-                                        taskType != null ? taskType.getColorHex() : FALLBACK_COLOR
-                                ))
-                        .add(actualFocusMinutes);
+                int actualFocusMinutes = Math.max(task.getDurationMinutes() - getAutomaticBreakMinutes(index, cursor), 0);
+                if (isFocusTask(taskType)) {
+                    stats.computeIfAbsent(
+                            taskType.getId(),
+                            ignored -> new StatAccumulator(
+                                    taskType.getId(),
+                                    taskType.getName(),
+                                    taskType.getIconKey(),
+                                    taskType.getColorHex()
+                            )
+                    ).add(actualFocusMinutes);
+                }
+                cursor = cursor.plusMinutes(task.getDurationMinutes());
             }
         }
 
@@ -110,7 +111,27 @@ public class AdminOverviewService {
                 ))
                 .toList();
 
-        return new AdminOverviewResponse(fromDate, toDate, plans.size(), focusMinutes, breakMinutes, daySummaries, typeStats);
+        return new AdminOverviewResponse(fromDate, toDate, plans.size(), focusMinutes, daySummaries, typeStats);
+    }
+
+    private boolean isFocusTask(TaskTypeEntity taskType) {
+        return taskType != null && taskType.isFocusTask();
+    }
+
+    private int getAutomaticBreakMinutes(int taskIndex, LocalTime boundaryTime) {
+        if (taskIndex == 0) {
+            return 0;
+        }
+
+        if (SKIPPED_BREAK_START_TIME.equals(boundaryTime) || isWithinNightPlan(boundaryTime)) {
+            return 0;
+        }
+
+        return BREAK_MINUTES;
+    }
+
+    private boolean isWithinNightPlan(LocalTime time) {
+        return !time.isBefore(EVENING_PLAN_START_TIME) || time.isBefore(EVENING_PLAN_END_TIME);
     }
 
     private static final class StatAccumulator {

@@ -32,6 +32,12 @@ public class TaskTypeEntity {
     @Column(nullable = false, length = 500)
     private String description = "";
 
+    @Column(name = "focus_task", nullable = false)
+    private boolean focusTask = true;
+
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -78,5 +84,21 @@ public class TaskTypeEntity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public boolean isFocusTask() {
+        return focusTask;
+    }
+
+    public void setFocusTask(boolean focusTask) {
+        this.focusTask = focusTask;
+    }
+
+    public int getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
     }
 }

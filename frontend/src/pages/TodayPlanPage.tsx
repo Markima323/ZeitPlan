@@ -86,9 +86,10 @@ export function TodayPlanPage({
     } as const;
   }, [schedule.blocks]);
 
-  const summaryLine = useMemo(() => {
-    return `今日共 ${plan?.tasks.length ?? 0} 个任务 · 专注 ${formatMinutes(schedule.focusMinutes)} · 休息 ${formatMinutes(schedule.breakMinutes)}`;
-  }, [plan?.tasks.length, schedule.breakMinutes, schedule.focusMinutes]);
+  const summaryLine = useMemo(
+    () => `今日共 ${plan?.tasks.length ?? 0} 个任务 · 专注 ${formatMinutes(schedule.focusMinutes)}`,
+    [plan?.tasks.length, schedule.focusMinutes],
+  );
 
   const focusBlockId = spotlight && spotlight.mode !== "done" ? spotlight.block.id : null;
 
@@ -102,7 +103,7 @@ export function TodayPlanPage({
             <p className="eyebrow">Today</p>
             <h1 className="today-title">今日计划</h1>
             <p className="today-meta">
-              {planDate} · 德国本地时间 / 北京时间对照 · {seasonMode === "SUMMER" ? "夏令时" : "冬令时"}
+              {planDate} · {seasonMode === "SUMMER" ? "夏令时" : "冬令时"}
             </p>
           </div>
 
@@ -127,14 +128,9 @@ export function TodayPlanPage({
               </>
             ) : (
               <>
-                <strong className="next-task-title">
-                  {spotlight.block.typeName} · {spotlight.block.title}
-                </strong>
+                <strong className="next-task-title">{spotlight.block.title}</strong>
                 <p className="next-task-time">
-                  {spotlight.block.localStartTime}–{spotlight.block.localEndTime} 本地时间
-                </p>
-                <p className="next-task-time muted">
-                  {spotlight.block.beijingStartTime}–{spotlight.block.beijingEndTime} 北京时间
+                  {spotlight.block.localStartTime} - {spotlight.block.localEndTime}
                 </p>
               </>
             )
@@ -163,19 +159,17 @@ export function TodayPlanPage({
           <div className="schedule-card today-schedule-card">
             <div className="today-table-header">
               <div>
-                <h2>完整日程</h2>
-                <p>完整安排放在第二层，方便先看重点，再向下核对细节。</p>
+                <h2>完整安排</h2>
+                <p>先看重点，再向下核对今天的完整节奏。</p>
               </div>
             </div>
 
             <div className="table-shell">
-              <table className="schedule-table today-plan-table">
+              <table className="schedule-table today-plan-table today-local-table">
                 <thead>
                   <tr>
-                    <th>本地开始</th>
-                    <th>本地结束</th>
-                    <th>北京开始</th>
-                    <th>北京结束</th>
+                    <th>开始</th>
+                    <th>结束</th>
                     <th>任务内容</th>
                   </tr>
                 </thead>
@@ -192,8 +186,6 @@ export function TodayPlanPage({
                     >
                       <td>{block.localStartTime}</td>
                       <td>{block.localEndTime}</td>
-                      <td>{block.beijingStartTime}</td>
-                      <td>{block.beijingEndTime}</td>
                       <td>
                         {block.breakBlock ? (
                           <span className="today-break-cell">

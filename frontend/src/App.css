@@ -189,6 +189,13 @@ button {
   position: relative;
 }
 
+.nav-side-tools {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+}
+
 .season-trigger {
   padding: 9px 12px;
   border: 1px solid rgba(82, 64, 46, 0.1);
@@ -247,6 +254,35 @@ button {
   width: min(1440px, 100%);
   margin: 0 auto;
   padding-top: 108px;
+}
+
+.auth-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(480px, 100%);
+  display: grid;
+  gap: 22px;
+}
+
+.auth-copy,
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-title {
+  margin: 6px 0 0;
+  font-size: clamp(2.4rem, 5vw, 3.4rem);
+  line-height: 1;
+}
+
+.auth-submit {
+  width: 100%;
 }
 
 .page-stack {
@@ -565,6 +601,7 @@ button {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
+  white-space: nowrap;
 }
 
 .task-card-grid,
@@ -602,6 +639,24 @@ button {
 
 .field-span-2 {
   grid-column: span 2;
+}
+
+.toggle-chip {
+  min-height: 49px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid rgba(238, 199, 151, 0.82);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--muted);
+}
+
+.toggle-chip.active {
+  background: rgba(244, 123, 32, 0.12);
+  border-color: rgba(244, 123, 32, 0.24);
+  color: var(--accent-dark);
 }
 
 .duration-switch {
@@ -893,6 +948,11 @@ button {
   font-size: 0.98rem;
 }
 
+.today-local-table td:last-child,
+.today-local-table th:last-child {
+  width: 100%;
+}
+
 .today-plan-table .focus-row td {
   background: rgba(244, 123, 32, 0.045);
 }
@@ -1017,8 +1077,38 @@ button {
   align-items: flex-start;
 }
 
+.type-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.type-row-copy {
+  min-width: 0;
+}
+
 .type-row-actions {
   align-self: center;
+}
+
+.type-row-tail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.type-row.dragging {
+  opacity: 0.72;
+}
+
+.type-row.drop-target {
+  border-color: rgba(184, 93, 35, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(184, 93, 35, 0.16);
+}
+
+.type-focus-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
 }
 
 .stats-grid,
@@ -1280,13 +1370,16 @@ body {
   grid-template-columns: minmax(0, 1.12fr) minmax(300px, 0.88fr);
 }
 
-.planner-preview-panel,
 .types-editor-panel,
 .admin-side-panel,
 .dice-history-panel {
   position: sticky;
   top: 102px;
   align-self: start;
+}
+
+.planner-preview-panel {
+  position: static;
 }
 
 .primary-button,
@@ -1321,6 +1414,10 @@ body {
   margin-bottom: 14px;
 }
 
+.nav-logout-button {
+  white-space: nowrap;
+}
+
 .planner-summary-line,
 .preview-summary-line {
   margin-bottom: 16px;
@@ -1353,8 +1450,67 @@ body {
   gap: 18px;
 }
 
+.planner-focus-layout {
+  grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.92fr);
+}
+
 .planner-preview-card {
   overflow: hidden;
+}
+
+.planner-preview-panel .schedule-table th,
+.planner-preview-panel .schedule-table td {
+  padding-left: 14px;
+  padding-right: 14px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.day-preview-table th:nth-child(-n + 4),
+.day-preview-table td:nth-child(-n + 4) {
+  width: 96px;
+  min-width: 96px;
+  white-space: nowrap;
+}
+
+.night-preview-table th:nth-child(-n + 2),
+.night-preview-table td:nth-child(-n + 2) {
+  width: 136px;
+  min-width: 136px;
+  white-space: nowrap;
+}
+
+.planner-preview-panel .schedule-table th:last-child,
+.planner-preview-panel .schedule-table td:last-child {
+  width: 99%;
+}
+
+.planner-preview-panel .task-cell {
+  gap: 10px;
+  justify-content: center;
+}
+
+.planner-preview-panel .task-copy {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+}
+
+.planner-preview-panel .task-copy strong,
+.planner-preview-panel .task-copy small {
+  white-space: nowrap;
+}
+
+.planner-preview-panel .task-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.planner-preview-panel .task-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .preview-card-caption {
@@ -1458,6 +1614,12 @@ body {
   border-radius: 14px;
 }
 
+.toggle-chip {
+  min-height: 45px;
+  border-color: rgba(117, 87, 54, 0.16);
+  border-radius: 14px;
+}
+
 .duration-switch button {
   border-radius: 14px;
 }
@@ -1507,6 +1669,47 @@ body {
 
 .break-row td {
   background: rgba(87, 72, 57, 0.03);
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.today-break-row td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.break-row .task-cell,
+.today-break-cell {
+  gap: 8px;
+}
+
+.break-row .task-icon-wrap {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.break-row .task-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.break-row .task-copy strong {
+  font-size: 0.84rem;
+}
+
+.break-row .task-copy small,
+.today-break-cell small {
+  font-size: 0.74rem;
+}
+
+.break-pill {
+  padding: 3px 8px;
+  font-size: 0.72rem;
 }
 
 .today-focus-shell {
@@ -1597,6 +1800,22 @@ body {
   margin-bottom: 0;
 }
 
+.type-editor-header {
+  align-items: flex-start;
+}
+
+.type-submit-button {
+  align-self: flex-start;
+  min-width: 168px;
+  white-space: nowrap;
+}
+
+.type-editor-cancel {
+  align-self: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
 .icon-picker {
   grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
   gap: 10px;
@@ -1640,6 +1859,36 @@ body {
 
 .ghost-text-button {
   padding: 9px 12px;
+}
+
+.drag-handle-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(117, 87, 54, 0.16);
+  border-radius: 12px;
+  background: rgba(117, 87, 54, 0.06);
+  color: var(--muted);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.drag-handle-button:hover,
+.drag-handle-button.active {
+  background: rgba(244, 123, 32, 0.12);
+  color: var(--accent-dark);
+  border-color: rgba(184, 93, 35, 0.2);
+}
+
+.drag-handle-button:active,
+.drag-handle-button.active {
+  cursor: grabbing;
+}
+
+.drag-handle-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .admin-toolbar {
@@ -1769,7 +2018,8 @@ body {
   .admin-day-top,
   .admin-day-meta,
   .type-row,
-  .history-row {
+  .history-row,
+  .type-editor-header {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1782,6 +2032,16 @@ body {
 
   .nav-links {
     justify-content: flex-start;
+  }
+
+  .nav-side-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .type-row-tail {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .today-focus-shell {

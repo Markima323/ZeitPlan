@@ -1,5 +1,6 @@
 package com.zeitplan.backend.controller;
 
+import com.zeitplan.backend.dto.TaskTypeOrderRequest;
 import com.zeitplan.backend.dto.TaskTypeRequest;
 import com.zeitplan.backend.dto.TaskTypeResponse;
 import com.zeitplan.backend.service.TaskTypeService;
@@ -43,6 +44,11 @@ public class TaskTypeController {
     @PutMapping("/{id}")
     public TaskTypeResponse update(@PathVariable Long id, @Valid @RequestBody TaskTypeRequest request) {
         return taskTypeService.update(id, request);
+    }
+
+    @PutMapping("/order")
+    public List<TaskTypeResponse> reorder(@Valid @RequestBody TaskTypeOrderRequest request) {
+        return taskTypeService.reorder(request);
     }
 
     @DeleteMapping("/{id}")

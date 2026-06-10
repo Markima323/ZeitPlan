@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Copy, PencilLine, Plus, Trash2 } from "lucide-react";
-import { toBlob } from "html-to-image";
+import { getFontEmbedCSS, toBlob } from "html-to-image";
 import { apiClient } from "../api/client";
 import type {
   DailyPlanResponse,
@@ -10,10 +10,10 @@ import type {
   TaskTypeResponse,
 } from "../api/types";
 import {
-  BREAK_MINUTES,
   buildScheduleBlocks,
   buildTaskTimeline,
   formatMinutes,
+  getAutomaticBreakMinutes,
   MIN_SLOT_DURATION_MINUTES,
   normalizeSlotDuration,
   parseClock,
@@ -64,6 +64,42 @@ function toEditableTasks(tasks: PlanTaskResponse[], resetTaskIds = false): Edita
     }));
 }
 
+function getDefaultTaskTypeId(taskTypes: TaskTypeResponse[]) {
+  return taskTypes.find((type) => type.name === "深度工作")?.id ?? taskTypes[0]?.id ?? null;
+}
+
+function getPreferredDefaultTaskTypeId(taskTypes: TaskTypeResponse[]) {
+  return (
+    taskTypes.find((type) => type.iconKey === "code")?.id ??
+    taskTypes.find((type) => type.focusTask)?.id ??
+    getDefaultTaskTypeId(taskTypes)
+  );
+}
+
+function mergeSavedTaskIds(currentTasks: EditableTask[], savedTasks: PlanTaskResponse[]) {
+  const savedTaskIdsByOrder = new Map(
+    [...savedTasks]
+      .sort((left, right) => left.orderIndex - right.orderIndex)
+      .map((task) => [task.orderIndex, task.id]),
+  );
+
+  let changed = false;
+  const nextTasks = currentTasks.map((task) => {
+    const savedId = savedTaskIdsByOrder.get(task.orderIndex);
+    if (savedId == null || savedId === task.id) {
+      return task;
+    }
+
+    changed = true;
+    return {
+      ...task,
+      id: savedId,
+    };
+  });
+
+  return changed ? nextTasks : currentTasks;
+}
+
 async function resolvePlanForDate(date: string): Promise<ResolvedPlanState> {
   const [plan, nextTaskTypes] = await Promise.all([apiClient.getPlan(date), apiClient.getTaskTypes()]);
 
@@ -109,6 +145,7 @@ export function SchedulePage({
   const taskCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const lastAppliedSeasonRef = useRef<SeasonMode>(seasonMode);
   const saveVersionRef = useRef(0);
+  const previewFontEmbedCssRef = useRef<string | null>(null);
 
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [dayStartLocalTime, setDayStartLocalTime] = useState("10:00");
@@ -123,6 +160,7 @@ export function SchedulePage({
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
   function markDirty() {
+    saveVersionRef.current += 1;
     setIsDirty(true);
     setAutoSaveState("idle");
   }
@@ -180,8 +218,7 @@ export function SchedulePage({
     }
 
     const timeoutId = window.setTimeout(() => {
-      setIsDirty(true);
-      setAutoSaveState("idle");
+      markDirty();
     }, 0);
 
     return () => {
@@ -190,11 +227,46 @@ export function SchedulePage({
   }, [isLoading, seasonMode]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function warmPreviewFontCache() {
+      if (previewFontEmbedCssRef.current) {
+        return;
+      }
+
+      const previewNode = dayPreviewRef.current ?? eveningPreviewRef.current;
+      if (!previewNode) {
+        return;
+      }
+
+      try {
+        const nextFontEmbedCss = await getFontEmbedCSS(previewNode, {
+          preferredFontFormat: "woff2",
+        });
+        if (!cancelled) {
+          previewFontEmbedCssRef.current = nextFontEmbedCss;
+        }
+      } catch {
+        // Ignore warm-up failures and use the default export path instead.
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void warmPreviewFontCache();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isLoading, selectedDate, tasks.length]);
+
+  useEffect(() => {
     if (isLoading || !isDirty) {
       return;
     }
 
-    const currentVersion = ++saveVersionRef.current;
+    const currentVersion = saveVersionRef.current;
 
     const timeoutId = window.setTimeout(async () => {
       setAutoSaveState("saving");
@@ -218,8 +290,12 @@ export function SchedulePage({
           return;
         }
 
-        setDayStartLocalTime(savedPlan.dayStartLocalTime.slice(0, 5));
-        setTasks(toEditableTasks(savedPlan.tasks));
+        const nextDayStartLocalTime = savedPlan.dayStartLocalTime.slice(0, 5);
+        if (nextDayStartLocalTime !== dayStartLocalTime) {
+          setDayStartLocalTime(nextDayStartLocalTime);
+        }
+
+        setTasks((current) => mergeSavedTaskIds(current, savedPlan.tasks));
         setTemplateSourceDate(null);
         setIsDirty(false);
         setAutoSaveState("saved");
@@ -306,7 +382,11 @@ export function SchedulePage({
     }
 
     const targetStartMinutes = resolveClockAtOrAfter(previousTimelineEntry.slotStartMinutes, nextTime);
-    updateTaskSlotDuration(index - 1, targetStartMinutes - BREAK_MINUTES - previousTimelineEntry.slotStartMinutes);
+    const breakMinutesBeforeCurrent = getAutomaticBreakMinutes(index, targetStartMinutes);
+    updateTaskSlotDuration(
+      index - 1,
+      targetStartMinutes - breakMinutesBeforeCurrent - previousTimelineEntry.slotStartMinutes,
+    );
   }
 
   function updateTaskEndTime(index: number, nextTime: string) {
@@ -320,7 +400,7 @@ export function SchedulePage({
   }
 
   function addTask(afterIndex: number) {
-    const defaultTypeId = taskTypes[0]?.id ?? null;
+    const defaultTypeId = getPreferredDefaultTaskTypeId(taskTypes);
     const nextTask: EditableTask = {
       clientId: makeClientId(),
       id: null,
@@ -338,7 +418,6 @@ export function SchedulePage({
         orderIndex: index,
       }));
     });
-    setExpandedTaskId(nextTask.clientId);
     markDirty();
   }
 
@@ -409,9 +488,18 @@ export function SchedulePage({
     setFeedback(null);
 
     try {
+      const fontEmbedCSS =
+        previewFontEmbedCssRef.current ??
+        await getFontEmbedCSS(previewNode, {
+          preferredFontFormat: "woff2",
+        });
+      previewFontEmbedCssRef.current = fontEmbedCSS;
+
       const blob = await toBlob(previewNode, {
         backgroundColor: "#fffaf2",
-        pixelRatio: 2,
+        pixelRatio: 1.5,
+        preferredFontFormat: "woff2",
+        fontEmbedCSS,
       });
 
       if (!blob) {
@@ -441,7 +529,7 @@ export function SchedulePage({
           ? "自动保存失败"
           : "修改后将自动保存";
 
-  const plannerSummaryLine = `${selectedDate} · ${tasks.length} 个任务 · 专注 ${formatMinutes(schedule.focusMinutes)} · 休息 ${formatMinutes(schedule.breakMinutes)}`;
+  const plannerSummaryLine = `${selectedDate} · ${tasks.length} 个任务 · 专注 ${formatMinutes(schedule.focusMinutes)}`;
 
   return (
     <div className="page-stack">
@@ -609,8 +697,10 @@ export function SchedulePage({
                         {timelineEntry ? (
                           <p className="task-detail-note">
                             {timelineEntry.hasBreakBefore
-                              ? `本任务前固定保留 ${BREAK_MINUTES} 分钟休息，当前专注 ${formatMinutes(timelineEntry.focusMinutes)}，整个时段 ${formatMinutes(task.durationMinutes)}。修改开始时间时会联动前一个时段。`
-                              : `当前专注 ${formatMinutes(timelineEntry.focusMinutes)}。`}
+                              ? `本任务前固定保留 ${timelineEntry.breakMinutesBefore} 分钟休息，当前专注 ${formatMinutes(timelineEntry.focusMinutes)}，整个时段 ${formatMinutes(task.durationMinutes)}。修改开始时间时会联动前一个时段。`
+                              : index > 0
+                                ? `当前这个时间点不会额外插入自动休息，当前专注 ${formatMinutes(timelineEntry.focusMinutes)}。`
+                                : `当前专注 ${formatMinutes(timelineEntry.focusMinutes)}。`}
                           </p>
                         ) : null}
 
@@ -627,7 +717,10 @@ export function SchedulePage({
                                     ? toClock(
                                         taskTimeline[index - 1].slotStartMinutes +
                                           MIN_SLOT_DURATION_MINUTES +
-                                          BREAK_MINUTES,
+                                          getAutomaticBreakMinutes(
+                                            index,
+                                            taskTimeline[index - 1].slotStartMinutes + MIN_SLOT_DURATION_MINUTES,
+                                          ),
                                       )
                                     : undefined
                                 }
@@ -684,7 +777,6 @@ export function SchedulePage({
             <div>
               <p className="eyebrow">Preview</p>
               <h2>日程预览</h2>
-              <p>这里保持轻量，负责导出白天/夜间两张表；双击任务行还能直接跳到左侧编辑器。</p>
             </div>
             <div className="panel-actions preview-actions">
               <button
@@ -723,7 +815,7 @@ export function SchedulePage({
               </div>
 
               <div className="table-shell">
-                <table className="schedule-table">
+                <table className="schedule-table day-preview-table">
                   <thead>
                     <tr>
                       <th>本地开始</th>
@@ -766,7 +858,7 @@ export function SchedulePage({
                                 >
                                   <TaskIcon iconKey={block.typeIcon} className="task-icon" />
                                 </span>
-                                <span>
+                                <span className="task-copy">
                                   <strong>{block.title}</strong>
                                   <small>{block.typeName}</small>
                                 </span>
@@ -797,7 +889,7 @@ export function SchedulePage({
               </div>
 
               <div className="table-shell">
-                <table className="schedule-table">
+                <table className="schedule-table night-preview-table">
                   <thead>
                     <tr>
                       <th>本地开始</th>
@@ -836,7 +928,7 @@ export function SchedulePage({
                                 >
                                   <TaskIcon iconKey={block.typeIcon} className="task-icon" />
                                 </span>
-                                <span>
+                                <span className="task-copy">
                                   <strong>{block.title}</strong>
                                   <small>{block.typeName}</small>
                                 </span>

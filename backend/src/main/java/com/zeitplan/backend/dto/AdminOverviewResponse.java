@@ -8,7 +8,6 @@ public record AdminOverviewResponse(
         LocalDate toDate,
         int plannedDays,
         int focusMinutes,
-        int breakMinutes,
         List<DailyPlanSummaryResponse> days,
         List<TaskTypeStatResponse> typeStats
 ) {

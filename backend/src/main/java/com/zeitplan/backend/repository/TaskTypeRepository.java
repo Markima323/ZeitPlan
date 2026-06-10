@@ -8,7 +8,9 @@ import java.util.Optional;
 
 public interface TaskTypeRepository extends JpaRepository<TaskTypeEntity, Long> {
 
-    List<TaskTypeEntity> findAllByOrderByNameAsc();
+    List<TaskTypeEntity> findAllByOrderBySortOrderAscIdAsc();
+
+    TaskTypeEntity findTopByOrderBySortOrderDescIdDesc();
 
     Optional<TaskTypeEntity> findByNameIgnoreCase(String name);
 }

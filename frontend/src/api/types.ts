@@ -6,10 +6,12 @@ export interface TaskTypePayload {
   iconKey: string;
   colorHex: string;
   description: string;
+  focusTask: boolean;
 }
 
 export interface TaskTypeResponse extends TaskTypePayload {
   id: number;
+  sortOrder: number;
 }
 
 export interface PlanTaskResponse {
@@ -40,7 +42,6 @@ export interface DailyPlanSummary {
   seasonMode: SeasonMode;
   taskCount: number;
   focusMinutes: number;
-  breakMinutes: number;
   firstLocalStartTime: string | null;
   lastLocalEndTime: string | null;
   highlightTasks: string[];
@@ -59,9 +60,14 @@ export interface AdminOverviewResponse {
   toDate: string;
   plannedDays: number;
   focusMinutes: number;
-  breakMinutes: number;
   days: DailyPlanSummary[];
   typeStats: TaskTypeStat[];
+}
+
+export interface AuthSessionResponse {
+  authenticated: boolean;
+  expiresAt: string;
+  cookieDurationDays: number;
 }
 
 export interface DiceRollResponse {

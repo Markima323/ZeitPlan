@@ -5,6 +5,8 @@ public record TaskTypeResponse(
         String name,
         String iconKey,
         String colorHex,
-        String description
+        String description,
+        boolean focusTask,
+        int sortOrder
 ) {
 }

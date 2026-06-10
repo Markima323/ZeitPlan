@@ -14,7 +14,9 @@ public final class TaskTypeMapper {
                 entity.getName(),
                 entity.getIconKey(),
                 entity.getColorHex(),
-                entity.getDescription()
+                entity.getDescription(),
+                entity.isFocusTask(),
+                entity.getSortOrder()
         );
     }
 }

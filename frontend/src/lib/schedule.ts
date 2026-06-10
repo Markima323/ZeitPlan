@@ -3,6 +3,9 @@ import type { PlanTaskResponse, SeasonMode, TaskTypeResponse } from "../api/type
 export const BREAK_MINUTES = 5;
 export const MIN_SLOT_DURATION_MINUTES = 10;
 export const MAX_SLOT_DURATION_MINUTES = 1440;
+export const SKIPPED_BREAK_START_MINUTES = 14 * 60;
+export const EVENING_PLAN_START_MINUTES = 17 * 60;
+export const EVENING_PLAN_END_MINUTES = 3 * 60;
 
 export interface ScheduleBlock {
   id: string;
@@ -27,6 +30,7 @@ export interface TaskTimelineEntry {
   taskEndMinutes: number;
   slotDurationMinutes: number;
   focusMinutes: number;
+  breakMinutesBefore: number;
   hasBreakBefore: boolean;
 }
 
@@ -48,6 +52,30 @@ export function toClock(totalMinutes: number) {
 export function parseClock(value: string) {
   const [hours, minutes] = value.split(":").map(Number);
   return (hours * 60) + minutes;
+}
+
+export function isWithinNightPlan(minutes: number) {
+  const normalizedMinutes = ((minutes % 1440) + 1440) % 1440;
+  return (
+    normalizedMinutes >= EVENING_PLAN_START_MINUTES ||
+    normalizedMinutes < EVENING_PLAN_END_MINUTES
+  );
+}
+
+export function getAutomaticBreakMinutes(taskIndex: number, boundaryMinutes: number) {
+  if (taskIndex === 0) {
+    return 0;
+  }
+
+  const normalizedBoundary = ((boundaryMinutes % 1440) + 1440) % 1440;
+  if (
+    normalizedBoundary === SKIPPED_BREAK_START_MINUTES ||
+    isWithinNightPlan(normalizedBoundary)
+  ) {
+    return 0;
+  }
+
+  return BREAK_MINUTES;
 }
 
 export function resolveClockAtOrAfter(anchorMinutes: number, value: string) {
@@ -90,13 +118,12 @@ export function buildScheduleBlocks(
 ) {
   const offsetMinutes = seasonMode === "SUMMER" ? 360 : 420;
   const taskTypeMap = new Map(taskTypes.map((item) => [item.id, item]));
-  const timeline = buildTaskTimeline(tasks, dayStartLocalTime);
+  const sortedTasks = [...tasks].sort((left, right) => left.orderIndex - right.orderIndex);
+  const timeline = buildTaskTimeline(sortedTasks, dayStartLocalTime);
 
   const blocks: ScheduleBlock[] = [];
 
-  [...tasks]
-    .sort((left, right) => left.orderIndex - right.orderIndex)
-    .forEach((task, index) => {
+  sortedTasks.forEach((task, index) => {
       const timelineEntry = timeline[index];
       const taskType = task.taskTypeId ? taskTypeMap.get(task.taskTypeId) : undefined;
 
@@ -110,7 +137,7 @@ export function buildScheduleBlocks(
           typeIcon: "coffee",
           typeColor: "#F8E6D2",
           taskOrderIndex: null,
-          durationMinutes: BREAK_MINUTES,
+          durationMinutes: timelineEntry.breakMinutesBefore,
           localStartTime: toClock(breakStart),
           localEndTime: toClock(breakEnd),
           beijingStartTime: toClock(breakStart + offsetMinutes),
@@ -139,8 +166,11 @@ export function buildScheduleBlocks(
 
   return {
     blocks,
-    focusMinutes: timeline.reduce((sum, item) => sum + item.focusMinutes, 0),
-    breakMinutes: timeline.filter((item) => item.hasBreakBefore).length * BREAK_MINUTES,
+    focusMinutes: sortedTasks.reduce((sum, task, index) => {
+      const taskType = task.taskTypeId ? taskTypeMap.get(task.taskTypeId) : undefined;
+      return sum + (taskType?.focusTask ? timeline[index].focusMinutes : 0);
+    }, 0),
+    breakMinutes: timeline.reduce((sum, item) => sum + item.breakMinutesBefore, 0),
   };
 }
 
@@ -151,8 +181,9 @@ export function buildTaskTimeline(tasks: PlanTaskResponse[], dayStartLocalTime: 
     .sort((left, right) => left.orderIndex - right.orderIndex)
     .map((task, index) => {
       const slotDurationMinutes = normalizeSlotDuration(task.durationMinutes);
-      const hasBreakBefore = index > 0;
-      const taskStartMinutes = hasBreakBefore ? cursor + BREAK_MINUTES : cursor;
+      const breakMinutesBefore = getAutomaticBreakMinutes(index, cursor);
+      const hasBreakBefore = breakMinutesBefore > 0;
+      const taskStartMinutes = cursor + breakMinutesBefore;
       const taskEndMinutes = cursor + slotDurationMinutes;
       const focusMinutes = Math.max(taskEndMinutes - taskStartMinutes, 0);
 
@@ -163,6 +194,7 @@ export function buildTaskTimeline(tasks: PlanTaskResponse[], dayStartLocalTime: 
         taskEndMinutes,
         slotDurationMinutes,
         focusMinutes,
+        breakMinutesBefore,
         hasBreakBefore,
       };
 

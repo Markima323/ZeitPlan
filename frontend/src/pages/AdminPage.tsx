@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart3, CalendarRange, Clock3 } from "lucide-react";
+import { BarChart3, Clock3 } from "lucide-react";
 import { apiClient } from "../api/client";
 import type { AdminOverviewResponse } from "../api/types";
 import { formatMinutes, todayIsoDate } from "../lib/schedule";
@@ -32,6 +32,7 @@ export function AdminPage() {
         const nextOverview = await apiClient.getAdminOverview(fromDate, toDate);
         if (!cancelled) {
           setOverview(nextOverview);
+          setFeedback(null);
         }
       } catch (error) {
         if (!cancelled) {
@@ -56,7 +57,7 @@ export function AdminPage() {
           <div>
             <p className="eyebrow">Overview</p>
             <h2>后台统计</h2>
-            <p>顶部只保留时间范围和摘要，把阅读重心留给下面的每日计划与类型时长。</p>
+            <p>顶部只保留时间范围和两个核心结果，把阅读重心留给下面的每日计划与类型时长。</p>
           </div>
           <div className="panel-actions admin-filter-row">
             <label className="field compact-field">
@@ -80,11 +81,6 @@ export function AdminPage() {
             <Clock3 size={18} />
             <strong>{formatMinutes(overview?.focusMinutes ?? 0)}</strong>
             专注总时长
-          </span>
-          <span className="admin-summary-pill">
-            <CalendarRange size={18} />
-            <strong>{formatMinutes(overview?.breakMinutes ?? 0)}</strong>
-            休息总时长
           </span>
         </div>
       </section>
@@ -112,7 +108,6 @@ export function AdminPage() {
 
                 <div className="admin-day-meta">
                   <span>专注 {formatMinutes(day.focusMinutes)}</span>
-                  <span>休息 {formatMinutes(day.breakMinutes)}</span>
                   <span>
                     {day.firstLocalStartTime ?? "--:--"} - {day.lastLocalEndTime ?? "--:--"}
                   </span>
@@ -137,7 +132,7 @@ export function AdminPage() {
             <div>
               <p className="eyebrow">Type Stats</p>
               <h2>类型时长统计</h2>
-              <p>右侧只保留聚合信息，避免与每日计划列表抢主视线。</p>
+              <p>这里只统计被标记为专注任务的类型，避免把吃饭、恢复一类任务混进专注总量。</p>
             </div>
           </div>
 
@@ -157,7 +152,7 @@ export function AdminPage() {
               </article>
             ))}
 
-            {overview?.typeStats.length === 0 ? <div className="empty-state">这里还没有可统计的任务类型。</div> : null}
+            {overview?.typeStats.length === 0 ? <div className="empty-state">这里还没有可统计的专注任务类型。</div> : null}
           </div>
         </aside>
       </section>
