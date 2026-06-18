@@ -82,6 +82,13 @@ function AppLayout({
   const location = useLocation();
   const topNavRef = useRef<HTMLElement | null>(null);
   const [navOffset, setNavOffset] = useState(148);
+  const [isCompactNav, setIsCompactNav] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.matchMedia("(max-width: 820px), (max-width: 1100px) and (hover: none) and (pointer: coarse)").matches;
+  });
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const navigationItems = [
@@ -119,10 +126,34 @@ function AppLayout({
   }, []);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 820px), (max-width: 1100px) and (hover: none) and (pointer: coarse)");
+
+    const syncCompactNav = () => {
+      const nextCompact = mediaQuery.matches;
+      setIsCompactNav(nextCompact);
+      if (!nextCompact) {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    syncCompactNav();
+    mediaQuery.addEventListener("change", syncCompactNav);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncCompactNav);
+    };
+  }, []);
+
+  useEffect(() => {
     setIsMobileNavOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
+    if (!isCompactNav) {
+      document.body.style.overflow = "";
+      return;
+    }
+
     if (!isMobileNavOpen) {
       document.body.style.overflow = "";
       return;
@@ -140,28 +171,24 @@ function AppLayout({
       document.body.style.overflow = "";
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isMobileNavOpen]);
-
-  useEffect(() => {
-    const closeDrawerOnDesktop = () => {
-      if (window.innerWidth > 820) {
-        setIsMobileNavOpen(false);
-      }
-    };
-
-    window.addEventListener("resize", closeDrawerOnDesktop);
-    return () => {
-      window.removeEventListener("resize", closeDrawerOnDesktop);
-    };
-  }, []);
+  }, [isCompactNav, isMobileNavOpen]);
 
   const appShellStyle = {
     "--nav-offset": `${navOffset}px`,
   } as CSSProperties;
 
   return (
-    <div className={isMobileNavOpen ? "app-shell mobile-nav-open" : "app-shell"} style={appShellStyle}>
-      <header ref={topNavRef} className="top-nav">
+    <div
+      className={[
+        "app-shell",
+        isCompactNav ? "compact-nav" : "",
+        isMobileNavOpen ? "mobile-nav-open" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={appShellStyle}
+    >
+      <header ref={topNavRef} className={isCompactNav ? "top-nav compact-nav-bar" : "top-nav"}>
         <div className="brand-block">
           <span className="brand-mark">Z</span>
           <div>
@@ -171,58 +198,68 @@ function AppLayout({
         </div>
 
         <nav className="nav-links">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink key={item.to} to={item.to} end={item.end}>
-                <Icon size={16} />
-                {item.label}
-              </NavLink>
-            );
-          })}
+          {!isCompactNav
+            ? navigationItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink key={item.to} to={item.to} end={item.end}>
+                    <Icon size={16} />
+                    {item.label}
+                  </NavLink>
+                );
+              })
+            : null}
         </nav>
 
         <div className="nav-side-tools">
-          <div className="season-menu">
-            <button className="season-trigger" type="button">
-              切换时差
-            </button>
-            <div className="season-dropdown">
-              <button type="button" onClick={() => onSeasonChange("SUMMER")}>
-                夏令时
-                <small>德国时间 + 6 小时 = 北京时间</small>
-              </button>
-              <button type="button" onClick={() => onSeasonChange("WINTER")}>
-                冬令时
-                <small>德国时间 + 7 小时 = 北京时间</small>
-              </button>
-            </div>
-          </div>
+          {!isCompactNav ? (
+            <>
+              <div className="season-menu">
+                <button className="season-trigger" type="button">
+                  切换时差
+                </button>
+                <div className="season-dropdown">
+                  <button type="button" onClick={() => onSeasonChange("SUMMER")}>
+                    夏令时
+                    <small>德国时间 + 6 小时 = 北京时间</small>
+                  </button>
+                  <button type="button" onClick={() => onSeasonChange("WINTER")}>
+                    冬令时
+                    <small>德国时间 + 7 小时 = 北京时间</small>
+                  </button>
+                </div>
+              </div>
 
-          <button className="ghost-button nav-logout-button" type="button" onClick={() => void onLogout()}>
-            <LogOut size={16} />
-            退出
-          </button>
+              <button className="ghost-button nav-logout-button" type="button" onClick={() => void onLogout()}>
+                <LogOut size={16} />
+                退出
+              </button>
+            </>
+          ) : null}
         </div>
 
-        <button
-          className="mobile-nav-toggle"
-          type="button"
-          aria-expanded={isMobileNavOpen}
-          aria-controls="mobile-drawer"
-          aria-label={isMobileNavOpen ? "关闭导航" : "打开导航"}
-          onClick={() => setIsMobileNavOpen((current) => !current)}
-        >
-          {isMobileNavOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        {isCompactNav ? (
+          <button
+            className="mobile-nav-toggle"
+            type="button"
+            aria-expanded={isMobileNavOpen}
+            aria-controls="mobile-drawer"
+            aria-label={isMobileNavOpen ? "关闭导航" : "打开导航"}
+            onClick={() => setIsMobileNavOpen((current) => !current)}
+          >
+            {isMobileNavOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        ) : null}
       </header>
 
-      <button
-        className={isMobileNavOpen ? "mobile-nav-backdrop open" : "mobile-nav-backdrop"}
-        type="button"
-        aria-label="关闭导航遮罩"
-        onClick={() => setIsMobileNavOpen(false)}
-      />
+      {isCompactNav ? (
+        <button
+          className={isMobileNavOpen ? "mobile-nav-backdrop open" : "mobile-nav-backdrop"}
+          type="button"
+          aria-label="关闭导航遮罩"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+      ) : null}
 
       <aside
         id="mobile-drawer"

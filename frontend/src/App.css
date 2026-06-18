@@ -183,6 +183,8 @@ button {
   color: var(--muted);
   transition: 180ms ease;
   min-width: 0;
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .nav-links a svg {
@@ -210,6 +212,173 @@ button {
 .mobile-nav-backdrop,
 .mobile-drawer {
   display: none;
+}
+
+.app-shell.compact-nav {
+  padding: 12px;
+}
+
+.app-shell.compact-nav .top-nav {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  top: 12px;
+  width: min(calc(100% - 24px), 720px);
+  padding: 12px 14px;
+  gap: 12px;
+}
+
+.app-shell.compact-nav .nav-links,
+.app-shell.compact-nav .nav-side-tools {
+  display: none;
+}
+
+.app-shell.compact-nav .mobile-nav-toggle {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(117, 87, 54, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--accent-dark);
+  box-shadow: var(--shadow-soft);
+  flex-shrink: 0;
+}
+
+.app-shell.compact-nav .mobile-nav-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  border: none;
+  background: rgba(42, 33, 25, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.app-shell.compact-nav .mobile-nav-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.app-shell.compact-nav .mobile-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 26;
+  width: min(78vw, 320px);
+  padding: 18px 16px 22px;
+  border-left: 1px solid rgba(117, 87, 54, 0.12);
+  background: rgba(255, 252, 247, 0.98);
+  box-shadow: -18px 0 42px rgba(42, 33, 25, 0.14);
+  transform: translateX(100%);
+  transition: transform 220ms ease;
+  overflow-y: auto;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  backdrop-filter: blur(18px);
+  pointer-events: none;
+}
+
+.app-shell.compact-nav .mobile-drawer.open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.app-shell.compact-nav .mobile-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-shell.compact-nav .mobile-drawer-brand {
+  width: auto;
+}
+
+.app-shell.compact-nav .mobile-drawer-close {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(117, 87, 54, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.app-shell.compact-nav .mobile-drawer-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.app-shell.compact-nav .mobile-drawer-nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.app-shell.compact-nav .mobile-drawer-nav a.active {
+  color: var(--accent-dark);
+  background: rgba(244, 123, 32, 0.12);
+}
+
+.app-shell.compact-nav .mobile-drawer-tools {
+  display: grid;
+  gap: 14px;
+}
+
+.app-shell.compact-nav .mobile-drawer-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-shell.compact-nav .mobile-season-group {
+  display: grid;
+  gap: 8px;
+}
+
+.app-shell.compact-nav .mobile-season-button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(117, 87, 54, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--text);
+  text-align: left;
+}
+
+.app-shell.compact-nav .mobile-season-button small {
+  color: var(--muted);
+}
+
+.app-shell.compact-nav .mobile-season-button.active {
+  border-color: rgba(184, 93, 35, 0.18);
+  background: rgba(244, 123, 32, 0.12);
+}
+
+.app-shell.compact-nav .mobile-logout-button {
+  width: 100%;
+  justify-content: center;
 }
 
 .season-trigger {
@@ -1316,7 +1485,7 @@ body {
 
 .main-shell {
   width: min(1380px, 100%);
-  padding-top: 88px;
+  padding-top: var(--nav-offset, 148px);
 }
 
 .page-stack {
@@ -2004,7 +2173,8 @@ body {
 .timer-display {
   font-size: clamp(4rem, 14vw, 6.8rem);
   line-height: 0.9;
-  font-weight: 800;
+  font-family: "Lexend", "Segoe UI", sans-serif;
+  font-weight: 700;
   letter-spacing: -0.08em;
   color: var(--text);
 }
