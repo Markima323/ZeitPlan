@@ -1,12 +1,21 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
-import { CalendarDays, Dice5, House, LayoutDashboard, LogOut, Shapes } from "lucide-react";
+import { CalendarDays, Clock3, Dice5, House, LayoutDashboard, LogOut, Shapes } from "lucide-react";
 import { AUTH_REQUIRED_EVENT, ApiError, apiClient } from "./api/client";
 import type { AuthSessionResponse, SeasonMode } from "./api/types";
 import { AdminPage } from "./pages/AdminPage";
 import { DicePage } from "./pages/DicePage";
 import { SchedulePage } from "./pages/SchedulePage";
 import { TaskTypesPage } from "./pages/TaskTypesPage";
+import { TimerPage } from "./pages/TimerPage";
 import { TodayPlanPage } from "./pages/TodayPlanPage";
 
 function LoginScreen({
@@ -70,9 +79,41 @@ function AppLayout({
   onLogout: () => Promise<void>;
   children: ReactNode;
 }) {
+  const topNavRef = useRef<HTMLElement | null>(null);
+  const [navOffset, setNavOffset] = useState(148);
+
+  useLayoutEffect(() => {
+    const topNav = topNavRef.current;
+    if (!topNav) {
+      return;
+    }
+
+    const updateOffset = () => {
+      setNavOffset(Math.ceil(topNav.getBoundingClientRect().height) + 36);
+    };
+
+    updateOffset();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateOffset();
+    });
+
+    resizeObserver.observe(topNav);
+    window.addEventListener("resize", updateOffset);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateOffset);
+    };
+  }, []);
+
+  const appShellStyle = {
+    "--nav-offset": `${navOffset}px`,
+  } as CSSProperties;
+
   return (
-    <div className="app-shell">
-      <header className="top-nav">
+    <div className="app-shell" style={appShellStyle}>
+      <header ref={topNavRef} className="top-nav">
         <div className="brand-block">
           <span className="brand-mark">Z</span>
           <div>
@@ -89,6 +130,10 @@ function AppLayout({
           <NavLink to="/planner">
             <CalendarDays size={16} />
             日程规划
+          </NavLink>
+          <NavLink to="/timer">
+            <Clock3 size={16} />
+            计时器
           </NavLink>
           <NavLink to="/dice">
             <Dice5 size={16} />
@@ -236,6 +281,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<TodayPlanPage seasonMode={seasonMode} onSeasonSync={setSeasonMode} />} />
           <Route path="/planner" element={<SchedulePage seasonMode={seasonMode} onSeasonSync={setSeasonMode} />} />
+          <Route path="/timer" element={<TimerPage />} />
           <Route path="/types" element={<TaskTypesPage />} />
           <Route path="/dashboard" element={<AdminPage />} />
           <Route path="/dice" element={<DicePage />} />
