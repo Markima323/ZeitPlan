@@ -2174,7 +2174,7 @@ body {
   font-size: clamp(4rem, 14vw, 6.8rem);
   line-height: 0.9;
   font-family: "Lexend", "Segoe UI", sans-serif;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.08em;
   color: var(--text);
 }
@@ -2225,6 +2225,146 @@ body {
 
 .timer-result-banner {
   margin-top: -4px;
+}
+
+.app-shell.compact-nav .page-stack {
+  gap: 18px;
+}
+
+.app-shell.compact-nav .content-panel,
+.app-shell.compact-nav .editor-panel,
+.app-shell.compact-nav .preview-panel {
+  padding: 18px;
+  border-radius: 22px;
+  min-width: 0;
+}
+
+.app-shell.compact-nav .planner-layout,
+.app-shell.compact-nav .two-column-grid,
+.app-shell.compact-nav .types-layout,
+.app-shell.compact-nav .admin-layout,
+.app-shell.compact-nav .dice-layout,
+.app-shell.compact-nav .today-focus-shell,
+.app-shell.compact-nav .today-hero,
+.app-shell.compact-nav .planner-focus-layout {
+  grid-template-columns: 1fr !important;
+  gap: 18px;
+}
+
+.app-shell.compact-nav .types-editor-panel,
+.app-shell.compact-nav .admin-side-panel,
+.app-shell.compact-nav .history-panel,
+.app-shell.compact-nav .dice-history-panel,
+.app-shell.compact-nav .planner-preview-panel {
+  position: static;
+  top: auto;
+  align-self: auto;
+}
+
+.app-shell.compact-nav .today-focus-shell,
+.app-shell.compact-nav .schedule-card-head,
+.app-shell.compact-nav .timer-stage {
+  padding: 18px;
+}
+
+.app-shell.compact-nav .today-focus-copy,
+.app-shell.compact-nav .today-spotlight-card,
+.app-shell.compact-nav .types-library-panel,
+.app-shell.compact-nav .types-editor-panel,
+.app-shell.compact-nav .admin-toolbar,
+.app-shell.compact-nav .admin-side-panel,
+.app-shell.compact-nav .dice-main-panel,
+.app-shell.compact-nav .dice-history-panel {
+  min-width: 0;
+}
+
+.app-shell.compact-nav .today-spotlight-card {
+  order: -1;
+}
+
+.app-shell.compact-nav .panel-header,
+.app-shell.compact-nav .type-editor-header,
+.app-shell.compact-nav .schedule-card-head,
+.app-shell.compact-nav .admin-day-top,
+.app-shell.compact-nav .admin-day-meta,
+.app-shell.compact-nav .type-row,
+.app-shell.compact-nav .history-row {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.app-shell.compact-nav .panel-header {
+  gap: 12px;
+}
+
+.app-shell.compact-nav .panel-header h2 {
+  font-size: 1.18rem;
+}
+
+.app-shell.compact-nav .planner-settings,
+.app-shell.compact-nav .task-card-grid,
+.app-shell.compact-nav .task-advanced-grid,
+.app-shell.compact-nav .form-grid,
+.app-shell.compact-nav .timer-config-grid {
+  grid-template-columns: 1fr;
+}
+
+.app-shell.compact-nav .field-span-2 {
+  grid-column: auto;
+}
+
+.app-shell.compact-nav .type-row-tail {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.app-shell.compact-nav .type-submit-button,
+.app-shell.compact-nav .mobile-logout-button {
+  width: 100%;
+}
+
+.app-shell.compact-nav .today-summary-line,
+.app-shell.compact-nav .admin-summary-line,
+.app-shell.compact-nav .preview-summary-line,
+.app-shell.compact-nav .dice-status-line,
+.app-shell.compact-nav .timer-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.app-shell.compact-nav .today-title {
+  font-size: clamp(2.1rem, 10vw, 3rem);
+}
+
+.app-shell.compact-nav .next-task-title {
+  font-size: 1.45rem;
+}
+
+.app-shell.compact-nav .task-card {
+  padding-left: 22px;
+  padding-top: 66px;
+}
+
+.app-shell.compact-nav .trash-button {
+  left: 22px;
+  top: 18px;
+}
+
+.app-shell.compact-nav .table-shell {
+  margin: 0 -18px;
+  padding: 0 18px 6px;
+}
+
+.app-shell.compact-nav .today-local-table {
+  min-width: 420px;
+}
+
+.app-shell.compact-nav .day-preview-table {
+  min-width: 720px;
+}
+
+.app-shell.compact-nav .night-preview-table {
+  min-width: 420px;
 }
 
 .history-row {
