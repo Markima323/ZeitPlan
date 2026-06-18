@@ -7,8 +7,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
-import { CalendarDays, Clock3, Dice5, House, LayoutDashboard, LogOut, Shapes } from "lucide-react";
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { CalendarDays, Clock3, Dice5, House, LayoutDashboard, LogOut, Menu, Shapes, X } from "lucide-react";
 import { AUTH_REQUIRED_EVENT, ApiError, apiClient } from "./api/client";
 import type { AuthSessionResponse, SeasonMode } from "./api/types";
 import { AdminPage } from "./pages/AdminPage";
@@ -79,8 +79,19 @@ function AppLayout({
   onLogout: () => Promise<void>;
   children: ReactNode;
 }) {
+  const location = useLocation();
   const topNavRef = useRef<HTMLElement | null>(null);
   const [navOffset, setNavOffset] = useState(148);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+
+  const navigationItems = [
+    { to: "/", icon: House, label: "今日计划", end: true },
+    { to: "/planner", icon: CalendarDays, label: "日程规划" },
+    { to: "/timer", icon: Clock3, label: "计时器" },
+    { to: "/dice", icon: Dice5, label: "投骰子" },
+    { to: "/types", icon: Shapes, label: "任务类型" },
+    { to: "/dashboard", icon: LayoutDashboard, label: "后台统计" },
+  ];
 
   useLayoutEffect(() => {
     const topNav = topNavRef.current;
@@ -107,12 +118,49 @@ function AppLayout({
     };
   }, []);
 
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isMobileNavOpen) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    document.body.style.overflow = "hidden";
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMobileNavOpen]);
+
+  useEffect(() => {
+    const closeDrawerOnDesktop = () => {
+      if (window.innerWidth > 820) {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    window.addEventListener("resize", closeDrawerOnDesktop);
+    return () => {
+      window.removeEventListener("resize", closeDrawerOnDesktop);
+    };
+  }, []);
+
   const appShellStyle = {
     "--nav-offset": `${navOffset}px`,
   } as CSSProperties;
 
   return (
-    <div className="app-shell" style={appShellStyle}>
+    <div className={isMobileNavOpen ? "app-shell mobile-nav-open" : "app-shell"} style={appShellStyle}>
       <header ref={topNavRef} className="top-nav">
         <div className="brand-block">
           <span className="brand-mark">Z</span>
@@ -123,30 +171,15 @@ function AppLayout({
         </div>
 
         <nav className="nav-links">
-          <NavLink to="/" end>
-            <House size={16} />
-            今日计划
-          </NavLink>
-          <NavLink to="/planner">
-            <CalendarDays size={16} />
-            日程规划
-          </NavLink>
-          <NavLink to="/timer">
-            <Clock3 size={16} />
-            计时器
-          </NavLink>
-          <NavLink to="/dice">
-            <Dice5 size={16} />
-            投骰子
-          </NavLink>
-          <NavLink to="/types">
-            <Shapes size={16} />
-            任务类型
-          </NavLink>
-          <NavLink to="/dashboard">
-            <LayoutDashboard size={16} />
-            后台统计
-          </NavLink>
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink key={item.to} to={item.to} end={item.end}>
+                <Icon size={16} />
+                {item.label}
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div className="nav-side-tools">
@@ -171,7 +204,98 @@ function AppLayout({
             退出
           </button>
         </div>
+
+        <button
+          className="mobile-nav-toggle"
+          type="button"
+          aria-expanded={isMobileNavOpen}
+          aria-controls="mobile-drawer"
+          aria-label={isMobileNavOpen ? "关闭导航" : "打开导航"}
+          onClick={() => setIsMobileNavOpen((current) => !current)}
+        >
+          {isMobileNavOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
       </header>
+
+      <button
+        className={isMobileNavOpen ? "mobile-nav-backdrop open" : "mobile-nav-backdrop"}
+        type="button"
+        aria-label="关闭导航遮罩"
+        onClick={() => setIsMobileNavOpen(false)}
+      />
+
+      <aside
+        id="mobile-drawer"
+        className={isMobileNavOpen ? "mobile-drawer open" : "mobile-drawer"}
+        aria-hidden={!isMobileNavOpen}
+      >
+        <div className="mobile-drawer-head">
+          <div className="brand-block mobile-drawer-brand">
+            <span className="brand-mark">Z</span>
+            <div>
+              <strong>ZeitPlan</strong>
+              <p>德国本地 / 北京时间</p>
+            </div>
+          </div>
+
+          <button
+            className="mobile-drawer-close"
+            type="button"
+            aria-label="关闭导航"
+            onClick={() => setIsMobileNavOpen(false)}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <nav className="mobile-drawer-nav">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={`mobile-${item.to}`}
+                to={item.to}
+                end={item.end}
+                onClick={() => setIsMobileNavOpen(false)}
+              >
+                <Icon size={18} />
+                {item.label}
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        <div className="mobile-drawer-tools">
+          <div className="mobile-season-group">
+            <p className="mobile-drawer-label">时差模式</p>
+            <button
+              className={seasonMode === "SUMMER" ? "mobile-season-button active" : "mobile-season-button"}
+              type="button"
+              onClick={() => onSeasonChange("SUMMER")}
+            >
+              夏令时
+              <small>德国时间 + 6 小时</small>
+            </button>
+            <button
+              className={seasonMode === "WINTER" ? "mobile-season-button active" : "mobile-season-button"}
+              type="button"
+              onClick={() => onSeasonChange("WINTER")}
+            >
+              冬令时
+              <small>德国时间 + 7 小时</small>
+            </button>
+          </div>
+
+          <button
+            className="ghost-button nav-logout-button mobile-logout-button"
+            type="button"
+            onClick={() => void onLogout()}
+          >
+            <LogOut size={16} />
+            退出
+          </button>
+        </div>
+      </aside>
 
       <main className="main-shell">{children}</main>
     </div>

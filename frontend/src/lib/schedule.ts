@@ -4,6 +4,7 @@ export const BREAK_MINUTES = 5;
 export const MIN_SLOT_DURATION_MINUTES = 10;
 export const MAX_SLOT_DURATION_MINUTES = 1440;
 export const MIDDAY_SKIPPED_BREAK_START_MINUTES = (11 * 60) + 55;
+export const NOON_SKIPPED_BREAK_START_MINUTES = 12 * 60;
 export const SKIPPED_BREAK_START_MINUTES = 14 * 60;
 export const EVENING_PLAN_START_MINUTES = 17 * 60;
 export const EVENING_PLAN_END_MINUTES = 3 * 60;
@@ -71,6 +72,7 @@ export function getAutomaticBreakMinutes(taskIndex: number, boundaryMinutes: num
   const normalizedBoundary = ((boundaryMinutes % 1440) + 1440) % 1440;
   if (
     normalizedBoundary === MIDDAY_SKIPPED_BREAK_START_MINUTES ||
+    normalizedBoundary === NOON_SKIPPED_BREAK_START_MINUTES ||
     normalizedBoundary === SKIPPED_BREAK_START_MINUTES ||
     isWithinNightPlan(normalizedBoundary)
   ) {

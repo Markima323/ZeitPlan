@@ -206,6 +206,12 @@ button {
   gap: 10px;
 }
 
+.mobile-nav-toggle,
+.mobile-nav-backdrop,
+.mobile-drawer {
+  display: none;
+}
+
 .season-trigger {
   padding: 9px 12px;
   border: 1px solid rgba(82, 64, 46, 0.1);
@@ -1998,7 +2004,7 @@ body {
 .timer-display {
   font-size: clamp(4rem, 14vw, 6.8rem);
   line-height: 0.9;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: -0.08em;
   color: var(--text);
 }
@@ -2102,7 +2108,6 @@ body {
   }
 
   .panel-header,
-  .top-nav,
   .schedule-card-head,
   .admin-day-top,
   .admin-day-meta,
@@ -2114,18 +2119,160 @@ body {
   }
 
   .top-nav {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     top: 16px;
     width: calc(100% - 32px);
+    padding: 12px 14px;
   }
 
-  .nav-links {
-    justify-content: flex-start;
-  }
-
+  .nav-links,
   .nav-side-tools {
-    width: 100%;
+    display: none;
+  }
+
+  .mobile-nav-toggle {
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(117, 87, 54, 0.14);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.84);
+    color: var(--accent-dark);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .mobile-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    border: none;
+    background: rgba(42, 33, 25, 0.22);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .mobile-nav-backdrop.open {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .mobile-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 26;
+    width: min(86vw, 340px);
+    padding: 18px 16px 22px;
+    border-left: 1px solid rgba(117, 87, 54, 0.12);
+    background: rgba(255, 252, 247, 0.98);
+    box-shadow: -18px 0 42px rgba(42, 33, 25, 0.14);
+    transform: translateX(100%);
+    transition: transform 220ms ease;
+    overflow-y: auto;
+    display: grid;
+    gap: 18px;
+    align-content: start;
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-drawer.open {
+    transform: translateX(0);
+  }
+
+  .mobile-drawer-head {
+    display: flex;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobile-drawer-brand {
+    width: auto;
+  }
+
+  .mobile-drawer-close {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(117, 87, 54, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .mobile-drawer-nav {
+    display: grid;
+    gap: 8px;
+  }
+
+  .mobile-drawer-nav a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .mobile-drawer-nav a.active {
+    color: var(--accent-dark);
+    background: rgba(244, 123, 32, 0.12);
+  }
+
+  .mobile-drawer-tools {
+    display: grid;
+    gap: 14px;
+  }
+
+  .mobile-drawer-label {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .mobile-season-group {
+    display: grid;
+    gap: 8px;
+  }
+
+  .mobile-season-button {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid rgba(117, 87, 54, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.76);
+    color: var(--text);
+    text-align: left;
+  }
+
+  .mobile-season-button small {
+    color: var(--muted);
+  }
+
+  .mobile-season-button.active {
+    border-color: rgba(184, 93, 35, 0.18);
+    background: rgba(244, 123, 32, 0.12);
+  }
+
+  .mobile-logout-button {
+    width: 100%;
+    justify-content: center;
   }
 
   .type-row-tail {
@@ -2183,8 +2330,6 @@ body {
     width: calc(100% - 24px);
     padding: 12px;
     gap: 12px;
-    max-height: calc(100vh - 24px);
-    overflow-y: auto;
   }
 
   .brand-block {
@@ -2193,44 +2338,6 @@ body {
 
   .brand-block p {
     font-size: 0.78rem;
-  }
-
-  .nav-links {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .nav-links a {
-    justify-content: center;
-    text-align: center;
-    padding: 10px 8px;
-    font-size: 0.92rem;
-  }
-
-  .nav-side-tools {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .season-menu,
-  .nav-logout-button,
-  .season-trigger {
-    width: 100%;
-  }
-
-  .season-trigger,
-  .nav-logout-button {
-    justify-content: center;
-  }
-
-  .season-dropdown {
-    left: 0;
-    right: auto;
-    width: min(calc(100vw - 40px), 320px);
   }
 
   .page-stack {
