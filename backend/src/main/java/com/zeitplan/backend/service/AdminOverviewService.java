@@ -23,6 +23,8 @@ import java.util.Map;
 public class AdminOverviewService {
 
     private static final int BREAK_MINUTES = 5;
+    private static final LocalTime MIDDAY_SKIPPED_BREAK_START_TIME = LocalTime.of(11, 55);
+    private static final LocalTime NOON_SKIPPED_BREAK_START_TIME = LocalTime.of(12, 0);
     private static final LocalTime SKIPPED_BREAK_START_TIME = LocalTime.of(14, 0);
     private static final LocalTime EVENING_PLAN_START_TIME = LocalTime.of(17, 0);
     private static final LocalTime EVENING_PLAN_END_TIME = LocalTime.of(3, 0);
@@ -50,41 +52,51 @@ public class AdminOverviewService {
                     .sorted(Comparator.comparing(PlanTaskEntity::getOrderIndex))
                     .toList();
 
+            List<TimedTask> timedTasks = new ArrayList<>();
             int dayFocusMinutes = 0;
-            int daySlotMinutes = 0;
             LocalTime cursor = plan.getDayStartLocalTime();
 
             for (int index = 0; index < sortedTasks.size(); index++) {
                 PlanTaskEntity task = sortedTasks.get(index);
-                int actualFocusMinutes = Math.max(task.getDurationMinutes() - getAutomaticBreakMinutes(index, cursor), 0);
-                if (isFocusTask(task.getTaskType())) {
+                int breakMinutes = getAutomaticBreakMinutes(index, cursor);
+                LocalTime taskStartTime = cursor.plusMinutes(breakMinutes);
+                LocalTime taskEndTime = cursor.plusMinutes(task.getDurationMinutes());
+                int actualFocusMinutes = Math.max(task.getDurationMinutes() - breakMinutes, 0);
+                TimedTask timedTask = new TimedTask(task, taskStartTime, taskEndTime, actualFocusMinutes);
+                timedTasks.add(timedTask);
+
+                if (shouldIncludeInStatistics(plan, taskStartTime) && isFocusTask(task.getTaskType())) {
                     dayFocusMinutes += actualFocusMinutes;
                 }
-                daySlotMinutes += task.getDurationMinutes();
-                cursor = cursor.plusMinutes(task.getDurationMinutes());
+                cursor = taskEndTime;
             }
 
             focusMinutes += dayFocusMinutes;
 
-            LocalTime lastTime = sortedTasks.isEmpty()
+            List<TimedTask> statsEligibleTasks = timedTasks.stream()
+                    .filter(timedTask -> shouldIncludeInStatistics(plan, timedTask.startTime()))
+                    .toList();
+
+            LocalTime firstTime = statsEligibleTasks.isEmpty()
                     ? null
-                    : plan.getDayStartLocalTime().plusMinutes(daySlotMinutes);
+                    : statsEligibleTasks.getFirst().startTime();
+            LocalTime lastTime = statsEligibleTasks.isEmpty()
+                    ? null
+                    : statsEligibleTasks.getLast().endTime();
 
             daySummaries.add(new DailyPlanSummaryResponse(
                     plan.getPlanDate(),
                     plan.getSeasonMode(),
-                    sortedTasks.size(),
+                    statsEligibleTasks.size(),
                     dayFocusMinutes,
-                    sortedTasks.isEmpty() ? null : plan.getDayStartLocalTime(),
+                    firstTime,
                     lastTime,
-                    sortedTasks.stream().limit(3).map(PlanTaskEntity::getTitle).toList()
+                    statsEligibleTasks.stream().limit(3).map(timedTask -> timedTask.task().getTitle()).toList()
             ));
 
-            cursor = plan.getDayStartLocalTime();
-            for (int index = 0; index < sortedTasks.size(); index++) {
-                PlanTaskEntity task = sortedTasks.get(index);
+            for (TimedTask timedTask : statsEligibleTasks) {
+                PlanTaskEntity task = timedTask.task();
                 TaskTypeEntity taskType = task.getTaskType();
-                int actualFocusMinutes = Math.max(task.getDurationMinutes() - getAutomaticBreakMinutes(index, cursor), 0);
                 if (isFocusTask(taskType)) {
                     stats.computeIfAbsent(
                             taskType.getId(),
@@ -94,9 +106,8 @@ public class AdminOverviewService {
                                     taskType.getIconKey(),
                                     taskType.getColorHex()
                             )
-                    ).add(actualFocusMinutes);
+                    ).add(timedTask.focusMinutes());
                 }
-                cursor = cursor.plusMinutes(task.getDurationMinutes());
             }
         }
 
@@ -118,12 +129,19 @@ public class AdminOverviewService {
         return taskType != null && taskType.isFocusTask();
     }
 
+    private boolean shouldIncludeInStatistics(DailyPlanEntity plan, LocalTime taskStartTime) {
+        return plan.isNightPlanEnabled() || !isWithinNightPlan(taskStartTime);
+    }
+
     private int getAutomaticBreakMinutes(int taskIndex, LocalTime boundaryTime) {
         if (taskIndex == 0) {
             return 0;
         }
 
-        if (SKIPPED_BREAK_START_TIME.equals(boundaryTime) || isWithinNightPlan(boundaryTime)) {
+        if (MIDDAY_SKIPPED_BREAK_START_TIME.equals(boundaryTime)
+                || NOON_SKIPPED_BREAK_START_TIME.equals(boundaryTime)
+                || SKIPPED_BREAK_START_TIME.equals(boundaryTime)
+                || isWithinNightPlan(boundaryTime)) {
             return 0;
         }
 
@@ -171,5 +189,13 @@ public class AdminOverviewService {
         private int totalMinutes() {
             return totalMinutes;
         }
+    }
+
+    private record TimedTask(
+            PlanTaskEntity task,
+            LocalTime startTime,
+            LocalTime endTime,
+            int focusMinutes
+    ) {
     }
 }

@@ -100,6 +100,42 @@ function mergeSavedTaskIds(currentTasks: EditableTask[], savedTasks: PlanTaskRes
   return changed ? nextTasks : currentTasks;
 }
 
+function createExportPreviewNode(sourceNode: HTMLDivElement) {
+  const wrapper = document.createElement("div");
+  const clone = sourceNode.cloneNode(true) as HTMLDivElement;
+  const sourceTable = sourceNode.querySelector("table");
+  const exportWidth = Math.max(
+    Math.ceil(sourceNode.getBoundingClientRect().width),
+    sourceTable instanceof HTMLElement ? Math.ceil(sourceTable.scrollWidth) + 32 : 0,
+  );
+
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-10000px";
+  wrapper.style.top = "0";
+  wrapper.style.zIndex = "-1";
+  wrapper.style.width = `${exportWidth}px`;
+  wrapper.style.background = "#fffaf2";
+  wrapper.style.pointerEvents = "none";
+
+  clone.style.width = `${exportWidth}px`;
+  clone.style.maxWidth = "none";
+  clone.style.overflow = "visible";
+
+  clone.querySelectorAll<HTMLElement>(".table-shell").forEach((shell) => {
+    shell.style.overflow = "visible";
+  });
+
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  return {
+    wrapper,
+    node: clone,
+    width: Math.max(exportWidth, Math.ceil(clone.scrollWidth)),
+    height: Math.ceil(clone.scrollHeight),
+  };
+}
+
 async function resolvePlanForDate(date: string): Promise<ResolvedPlanState> {
   const [plan, nextTaskTypes] = await Promise.all([apiClient.getPlan(date), apiClient.getTaskTypes()]);
 
@@ -118,6 +154,7 @@ async function resolvePlanForDate(date: string): Promise<ResolvedPlanState> {
       plan: {
         ...plan,
         tasks: latestPlan.tasks,
+        nightPlanEnabled: latestPlan.nightPlanEnabled,
       },
       taskTypes: nextTaskTypes,
       templateSourceDate: latestPlan.planDate,
@@ -149,6 +186,7 @@ export function SchedulePage({
 
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [dayStartLocalTime, setDayStartLocalTime] = useState("10:00");
+  const [nightPlanEnabled, setNightPlanEnabled] = useState(true);
   const [tasks, setTasks] = useState<EditableTask[]>([]);
   const [taskTypes, setTaskTypes] = useState<TaskTypeResponse[]>([]);
   const [templateSourceDate, setTemplateSourceDate] = useState<string | null>(null);
@@ -169,6 +207,7 @@ export function SchedulePage({
     saveVersionRef.current += 1;
     setSelectedDate(nextDate);
     setDayStartLocalTime("10:00");
+    setNightPlanEnabled(true);
     setTasks([]);
     setTemplateSourceDate(null);
     setFeedback(null);
@@ -188,6 +227,7 @@ export function SchedulePage({
           lastAppliedSeasonRef.current = resolvedPlan.plan.seasonMode;
           setTaskTypes(resolvedPlan.taskTypes);
           setDayStartLocalTime(resolvedPlan.plan.dayStartLocalTime.slice(0, 5));
+          setNightPlanEnabled(resolvedPlan.plan.nightPlanEnabled);
           setTasks(toEditableTasks(resolvedPlan.plan.tasks, resolvedPlan.resetTaskIds));
           setTemplateSourceDate(resolvedPlan.templateSourceDate);
           setIsDirty(false);
@@ -277,6 +317,7 @@ export function SchedulePage({
           planDate: selectedDate,
           seasonMode,
           dayStartLocalTime,
+          nightPlanEnabled,
           tasks: tasks.map((task, index) => ({
             id: task.id,
             title: task.title.trim(),
@@ -315,7 +356,7 @@ export function SchedulePage({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [dayStartLocalTime, isDirty, onSeasonSync, seasonMode, selectedDate, tasks, isLoading]);
+  }, [dayStartLocalTime, isDirty, nightPlanEnabled, onSeasonSync, seasonMode, selectedDate, tasks, isLoading]);
 
   const orderedTasks = useMemo(
     () => [...tasks].sort((left, right) => left.orderIndex - right.orderIndex),
@@ -330,8 +371,8 @@ export function SchedulePage({
   const taskTimeline = useMemo(() => buildTaskTimeline(orderedTasks, dayStartLocalTime), [dayStartLocalTime, orderedTasks]);
 
   const schedule = useMemo(
-    () => buildScheduleBlocks(orderedTasks, taskTypes, dayStartLocalTime, seasonMode),
-    [dayStartLocalTime, orderedTasks, seasonMode, taskTypes],
+    () => buildScheduleBlocks(orderedTasks, taskTypes, dayStartLocalTime, seasonMode, nightPlanEnabled),
+    [dayStartLocalTime, nightPlanEnabled, orderedTasks, seasonMode, taskTypes],
   );
 
   const daytimePreviewBlocks = useMemo(
@@ -343,15 +384,17 @@ export function SchedulePage({
   );
 
   const eveningPreviewBlocks = useMemo(
-    () =>
+    () => nightPlanEnabled
+      ? (
       schedule.blocks.filter((block) =>
         isWithinPreviewRange(
           parseClock(block.localStartTime),
           EVENING_PREVIEW_START_MINUTES,
           EVENING_PREVIEW_END_MINUTES,
         ),
-      ),
-    [schedule.blocks],
+      ))
+      : [],
+    [nightPlanEnabled, schedule.blocks],
   );
 
   function updateTaskByIndex(index: number, changes: Partial<EditableTask>) {
@@ -475,6 +518,11 @@ export function SchedulePage({
     const previewNode = target === "day" ? dayPreviewRef.current : eveningPreviewRef.current;
     const previewLabel = target === "day" ? "白天日程图" : "夜间日程图";
 
+    if (target === "evening" && !nightPlanEnabled) {
+      setFeedback("夜计划未启用，当前无法导出夜间预览");
+      return;
+    }
+
     if (!previewNode) {
       return;
     }
@@ -487,6 +535,8 @@ export function SchedulePage({
     setCopyingTarget(target);
     setFeedback(null);
 
+    let exportSnapshot: ReturnType<typeof createExportPreviewNode> | null = null;
+
     try {
       const fontEmbedCSS =
         previewFontEmbedCssRef.current ??
@@ -495,9 +545,15 @@ export function SchedulePage({
         });
       previewFontEmbedCssRef.current = fontEmbedCSS;
 
-      const blob = await toBlob(previewNode, {
+      exportSnapshot = createExportPreviewNode(previewNode);
+
+      const blob = await toBlob(exportSnapshot.node, {
         backgroundColor: "#fffaf2",
         pixelRatio: 1.5,
+        width: exportSnapshot.width,
+        height: exportSnapshot.height,
+        canvasWidth: Math.round(exportSnapshot.width * 1.5),
+        canvasHeight: Math.round(exportSnapshot.height * 1.5),
         preferredFontFormat: "woff2",
         fontEmbedCSS,
       });
@@ -516,6 +572,7 @@ export function SchedulePage({
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "复制失败");
     } finally {
+      exportSnapshot?.wrapper.remove();
       setCopyingTarget(null);
     }
   }
@@ -529,7 +586,7 @@ export function SchedulePage({
           ? "自动保存失败"
           : "修改后将自动保存";
 
-  const plannerSummaryLine = `${selectedDate} · ${tasks.length} 个任务 · 专注 ${formatMinutes(schedule.focusMinutes)}`;
+  const plannerSummaryLine = `${selectedDate} · ${tasks.length} 个任务 · 专注 ${formatMinutes(schedule.focusMinutes)}${nightPlanEnabled ? "" : " · 夜计划关闭"}`;
 
   return (
     <div className="page-stack">
@@ -568,6 +625,20 @@ export function SchedulePage({
                   markDirty();
                 }}
               />
+            </label>
+            <label className="field compact-field">
+              <span>夜计划导出</span>
+              <button
+                className={nightPlanEnabled ? "toggle-chip active" : "toggle-chip"}
+                type="button"
+                onClick={() => {
+                  setNightPlanEnabled((current) => !current);
+                  markDirty();
+                }}
+                aria-pressed={nightPlanEnabled}
+              >
+                {nightPlanEnabled ? "已启用" : "未启用"}
+              </button>
             </label>
           </div>
 
@@ -792,7 +863,7 @@ export function SchedulePage({
                 className="ghost-button"
                 type="button"
                 onClick={() => void copyPreviewImage("evening")}
-                disabled={copyingTarget !== null || isLoading || eveningPreviewBlocks.length === 0}
+                disabled={copyingTarget !== null || isLoading || !nightPlanEnabled || eveningPreviewBlocks.length === 0}
               >
                 <Copy size={16} />
                 {copyingTarget === "evening" ? "生成中..." : "复制夜间图"}
@@ -879,75 +950,87 @@ export function SchedulePage({
               </div>
             </div>
 
-            <div ref={eveningPreviewRef} className="schedule-card planner-preview-card night-preview-card">
-              <div className="schedule-card-head">
-                <div>
-                  <p className="eyebrow">ZeitPlan</p>
-                  <h3>{selectedDate} 夜间计划</h3>
-                  <p className="preview-card-caption">德国 17:00-03:00 · 仅显示德国本地时间</p>
+            {nightPlanEnabled ? (
+              <div ref={eveningPreviewRef} className="schedule-card planner-preview-card night-preview-card">
+                <div className="schedule-card-head">
+                  <div>
+                    <p className="eyebrow">ZeitPlan</p>
+                    <h3>{selectedDate} 夜间计划</h3>
+                    <p className="preview-card-caption">德国 17:00-03:00 · 仅显示德国本地时间</p>
+                  </div>
+                </div>
+
+                <div className="table-shell">
+                  <table className="schedule-table night-preview-table">
+                    <thead>
+                      <tr>
+                        <th>本地开始</th>
+                        <th>本地结束</th>
+                        <th>任务内容</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={3} className="table-empty">
+                            正在加载这一天的计划...
+                          </td>
+                        </tr>
+                      ) : null}
+                      {!isLoading
+                        ? eveningPreviewBlocks.map((block) => (
+                            <tr
+                              key={block.id}
+                              className={[
+                                block.breakBlock ? "break-row" : "",
+                                block.editable ? "preview-task-row" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              title={block.editable ? "双击跳转到左侧任务编辑器" : undefined}
+                              onDoubleClick={() => scrollToTaskEditor(block.taskOrderIndex)}
+                            >
+                              <td>{block.localStartTime}</td>
+                              <td>{block.localEndTime}</td>
+                              <td>
+                                <span className="task-cell">
+                                  <span
+                                    className="task-icon-wrap"
+                                    style={{ backgroundColor: block.breakBlock ? "#FFF5E8" : `${block.typeColor}22` }}
+                                  >
+                                    <TaskIcon iconKey={block.typeIcon} className="task-icon" />
+                                  </span>
+                                  <span className="task-copy">
+                                    <strong>{block.title}</strong>
+                                    <small>{block.typeName}</small>
+                                  </span>
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        : null}
+                      {!isLoading && eveningPreviewBlocks.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="table-empty">
+                            17:00 到次日 03:00 之间还没有可导出的任务。
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-
-              <div className="table-shell">
-                <table className="schedule-table night-preview-table">
-                  <thead>
-                    <tr>
-                      <th>本地开始</th>
-                      <th>本地结束</th>
-                      <th>任务内容</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoading ? (
-                      <tr>
-                        <td colSpan={3} className="table-empty">
-                          正在加载这一天的计划...
-                        </td>
-                      </tr>
-                    ) : null}
-                    {!isLoading
-                      ? eveningPreviewBlocks.map((block) => (
-                          <tr
-                            key={block.id}
-                            className={[
-                              block.breakBlock ? "break-row" : "",
-                              block.editable ? "preview-task-row" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            title={block.editable ? "双击跳转到左侧任务编辑器" : undefined}
-                            onDoubleClick={() => scrollToTaskEditor(block.taskOrderIndex)}
-                          >
-                            <td>{block.localStartTime}</td>
-                            <td>{block.localEndTime}</td>
-                            <td>
-                              <span className="task-cell">
-                                <span
-                                  className="task-icon-wrap"
-                                  style={{ backgroundColor: block.breakBlock ? "#FFF5E8" : `${block.typeColor}22` }}
-                                >
-                                  <TaskIcon iconKey={block.typeIcon} className="task-icon" />
-                                </span>
-                                <span className="task-copy">
-                                  <strong>{block.title}</strong>
-                                  <small>{block.typeName}</small>
-                                </span>
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      : null}
-                    {!isLoading && eveningPreviewBlocks.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="table-empty">
-                          17:00 到次日 03:00 之间还没有可导出的任务。
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
+            ) : (
+              <div className="schedule-card planner-preview-card preview-disabled-card">
+                <div className="schedule-card-head">
+                  <div>
+                    <p className="eyebrow">ZeitPlan</p>
+                    <h3>{selectedDate} 夜间计划</h3>
+                    <p className="preview-card-caption">夜计划未启用，当前不会导出夜间图，也不会计入统计。</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </aside>
       </section>

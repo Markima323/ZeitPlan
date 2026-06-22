@@ -27,6 +27,7 @@ export interface DailyPlanResponse {
   planDate: string;
   seasonMode: SeasonMode;
   dayStartLocalTime: string;
+  nightPlanEnabled: boolean;
   tasks: PlanTaskResponse[];
 }
 
@@ -34,6 +35,7 @@ export interface DailyPlanPayload {
   planDate: string;
   seasonMode: SeasonMode;
   dayStartLocalTime: string;
+  nightPlanEnabled: boolean;
   tasks: PlanTaskResponse[];
 }
 

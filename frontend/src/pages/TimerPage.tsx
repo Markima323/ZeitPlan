@@ -53,17 +53,36 @@ export function TimerPage() {
     if (audioContextRef.current.state === "suspended") {
       await audioContextRef.current.resume();
     }
+
+    // Play an almost-silent blip during the user gesture so mobile browsers fully unlock audio playback.
+    const oscillator = audioContextRef.current.createOscillator();
+    const gain = audioContextRef.current.createGain();
+    const now = audioContextRef.current.currentTime;
+    oscillator.type = "sine";
+    oscillator.frequency.value = 440;
+    gain.gain.setValueAtTime(0.0001, now);
+    oscillator.connect(gain);
+    gain.connect(audioContextRef.current.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.01);
   }
 
-  function playCompletionSound() {
+  async function playCompletionSound() {
     const AudioContextConstructor = getAudioContextConstructor();
-    if (!audioContextRef.current && AudioContextConstructor) {
+    if (
+      (!audioContextRef.current || audioContextRef.current.state === "closed")
+      && AudioContextConstructor
+    ) {
       audioContextRef.current = new AudioContextConstructor();
     }
 
     const audioContext = audioContextRef.current;
     if (!audioContext) {
       return;
+    }
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
     }
 
     const now = audioContext.currentTime;
@@ -150,7 +169,7 @@ export function TimerPage() {
           minute: "2-digit",
         }),
       );
-      playCompletionSound();
+      void playCompletionSound();
 
       if ("vibrate" in navigator) {
         navigator.vibrate?.([120, 80, 120]);

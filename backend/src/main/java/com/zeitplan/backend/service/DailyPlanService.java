@@ -39,7 +39,7 @@ public class DailyPlanService {
     public DailyPlanResponse getPlan(LocalDate planDate) {
         return dailyPlanRepository.findByPlanDate(planDate)
                 .map(PlanMapper::toResponse)
-                .orElseGet(() -> new DailyPlanResponse(null, planDate, SeasonMode.SUMMER, LocalTime.of(10, 0), List.of()));
+                .orElseGet(() -> new DailyPlanResponse(null, planDate, SeasonMode.SUMMER, LocalTime.of(10, 0), true, List.of()));
     }
 
     @Transactional(readOnly = true)
@@ -62,6 +62,7 @@ public class DailyPlanService {
         entity.setPlanDate(pathDate);
         entity.setSeasonMode(request.seasonMode());
         entity.setDayStartLocalTime(request.dayStartLocalTime());
+        entity.setNightPlanEnabled(Boolean.TRUE.equals(request.nightPlanEnabled()));
 
         Map<Long, PlanTaskEntity> existingTasks = new HashMap<>();
         entity.getTasks().forEach(task -> existingTasks.put(task.getId(), task));

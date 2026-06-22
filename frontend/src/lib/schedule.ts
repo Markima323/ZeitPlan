@@ -36,6 +36,10 @@ export interface TaskTimelineEntry {
   hasBreakBefore: boolean;
 }
 
+export function shouldIncludeNightPlanContent(nightPlanEnabled: boolean, startMinutes: number) {
+  return nightPlanEnabled || !isWithinNightPlan(startMinutes);
+}
+
 export function todayIsoDate() {
   const now = new Date();
   const year = now.getFullYear();
@@ -119,6 +123,7 @@ export function buildScheduleBlocks(
   taskTypes: TaskTypeResponse[],
   dayStartLocalTime: string,
   seasonMode: SeasonMode,
+  nightPlanEnabled = true,
 ) {
   const offsetMinutes = seasonMode === "SUMMER" ? 360 : 420;
   const taskTypeMap = new Map(taskTypes.map((item) => [item.id, item]));
@@ -172,9 +177,17 @@ export function buildScheduleBlocks(
     blocks,
     focusMinutes: sortedTasks.reduce((sum, task, index) => {
       const taskType = task.taskTypeId ? taskTypeMap.get(task.taskTypeId) : undefined;
-      return sum + (taskType?.focusTask ? timeline[index].focusMinutes : 0);
+      return sum + (
+        taskType?.focusTask && shouldIncludeNightPlanContent(nightPlanEnabled, timeline[index].taskStartMinutes)
+          ? timeline[index].focusMinutes
+          : 0
+      );
     }, 0),
-    breakMinutes: timeline.reduce((sum, item) => sum + item.breakMinutesBefore, 0),
+    breakMinutes: timeline.reduce((sum, item) => (
+      shouldIncludeNightPlanContent(nightPlanEnabled, item.slotStartMinutes)
+        ? sum + item.breakMinutesBefore
+        : sum
+    ), 0),
   };
 }
 
