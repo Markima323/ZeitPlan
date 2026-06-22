@@ -100,39 +100,16 @@ function mergeSavedTaskIds(currentTasks: EditableTask[], savedTasks: PlanTaskRes
   return changed ? nextTasks : currentTasks;
 }
 
-function createExportPreviewNode(sourceNode: HTMLDivElement) {
-  const wrapper = document.createElement("div");
-  const clone = sourceNode.cloneNode(true) as HTMLDivElement;
+function measureExportPreviewSize(sourceNode: HTMLDivElement) {
   const sourceTable = sourceNode.querySelector("table");
   const exportWidth = Math.max(
     Math.ceil(sourceNode.getBoundingClientRect().width),
     sourceTable instanceof HTMLElement ? Math.ceil(sourceTable.scrollWidth) + 32 : 0,
   );
 
-  wrapper.style.position = "fixed";
-  wrapper.style.left = "-10000px";
-  wrapper.style.top = "0";
-  wrapper.style.zIndex = "-1";
-  wrapper.style.width = `${exportWidth}px`;
-  wrapper.style.background = "#fffaf2";
-  wrapper.style.pointerEvents = "none";
-
-  clone.style.width = `${exportWidth}px`;
-  clone.style.maxWidth = "none";
-  clone.style.overflow = "visible";
-
-  clone.querySelectorAll<HTMLElement>(".table-shell").forEach((shell) => {
-    shell.style.overflow = "visible";
-  });
-
-  wrapper.appendChild(clone);
-  document.body.appendChild(wrapper);
-
   return {
-    wrapper,
-    node: clone,
-    width: Math.max(exportWidth, Math.ceil(clone.scrollWidth)),
-    height: Math.ceil(clone.scrollHeight),
+    width: exportWidth,
+    height: Math.max(Math.ceil(sourceNode.scrollHeight), Math.ceil(sourceNode.getBoundingClientRect().height)),
   };
 }
 
@@ -535,8 +512,6 @@ export function SchedulePage({
     setCopyingTarget(target);
     setFeedback(null);
 
-    let exportSnapshot: ReturnType<typeof createExportPreviewNode> | null = null;
-
     try {
       const fontEmbedCSS =
         previewFontEmbedCssRef.current ??
@@ -545,15 +520,18 @@ export function SchedulePage({
         });
       previewFontEmbedCssRef.current = fontEmbedCSS;
 
-      exportSnapshot = createExportPreviewNode(previewNode);
+      const exportSize = measureExportPreviewSize(previewNode);
 
-      const blob = await toBlob(exportSnapshot.node, {
+      const blob = await toBlob(previewNode, {
         backgroundColor: "#fffaf2",
         pixelRatio: 1.5,
-        width: exportSnapshot.width,
-        height: exportSnapshot.height,
-        canvasWidth: Math.round(exportSnapshot.width * 1.5),
-        canvasHeight: Math.round(exportSnapshot.height * 1.5),
+        width: exportSize.width,
+        height: exportSize.height,
+        style: {
+          width: `${exportSize.width}px`,
+          maxWidth: "none",
+          overflow: "visible",
+        },
         preferredFontFormat: "woff2",
         fontEmbedCSS,
       });
@@ -572,7 +550,6 @@ export function SchedulePage({
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "复制失败");
     } finally {
-      exportSnapshot?.wrapper.remove();
       setCopyingTarget(null);
     }
   }

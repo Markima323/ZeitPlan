@@ -19,6 +19,12 @@ function getAudioContextConstructor() {
   );
 }
 
+const COMPLETION_CHIME_FREQUENCIES = [523.25, 659.25, 783.99];
+const COMPLETION_CHIME_REPEATS = [0, 0.62];
+const COMPLETION_CHIME_NOTE_DURATION = 0.34;
+const COMPLETION_CHIME_NOTE_GAP = 0.18;
+const COMPLETION_CHIME_PEAK_GAIN = 0.16;
+
 export function TimerPage() {
   const deadlineRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -86,19 +92,28 @@ export function TimerPage() {
     }
 
     const now = audioContext.currentTime;
-    [523.25, 659.25, 783.99].forEach((frequency, index) => {
-      const startAt = now + (index * 0.18);
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(0.001, startAt);
-      gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.16);
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      oscillator.start(startAt);
-      oscillator.stop(startAt + 0.18);
+    COMPLETION_CHIME_REPEATS.forEach((repeatOffset) => {
+      COMPLETION_CHIME_FREQUENCIES.forEach((frequency, index) => {
+        const startAt = now + repeatOffset + (index * COMPLETION_CHIME_NOTE_GAP);
+        const oscillator = audioContext.createOscillator();
+        const harmonicOscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = "triangle";
+        oscillator.frequency.value = frequency;
+        harmonicOscillator.type = "sine";
+        harmonicOscillator.frequency.value = frequency * 2;
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(COMPLETION_CHIME_PEAK_GAIN, startAt + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.16);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + COMPLETION_CHIME_NOTE_DURATION);
+        oscillator.connect(gain);
+        harmonicOscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(startAt);
+        harmonicOscillator.start(startAt);
+        oscillator.stop(startAt + COMPLETION_CHIME_NOTE_DURATION);
+        harmonicOscillator.stop(startAt + COMPLETION_CHIME_NOTE_DURATION);
+      });
     });
   }
 
