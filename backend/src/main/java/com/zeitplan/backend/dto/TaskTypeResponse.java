@@ -1,5 +1,7 @@
 package com.zeitplan.backend.dto;
 
+import java.util.List;
+
 public record TaskTypeResponse(
         Long id,
         String name,
@@ -7,6 +9,7 @@ public record TaskTypeResponse(
         String colorHex,
         String description,
         boolean focusTask,
-        int sortOrder
+        int sortOrder,
+        List<String> keywords
 ) {
 }

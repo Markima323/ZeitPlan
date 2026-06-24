@@ -1,6 +1,7 @@
 package com.zeitplan.backend.service;
 
 import com.zeitplan.backend.dto.TaskTypeOrderRequest;
+import com.zeitplan.backend.dto.TaskTypeKeywordsRequest;
 import com.zeitplan.backend.dto.TaskTypeRequest;
 import com.zeitplan.backend.dto.TaskTypeResponse;
 import com.zeitplan.backend.entity.TaskTypeEntity;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Transactional
@@ -70,10 +72,26 @@ class TaskTypeServiceTests {
         taskTypeRepository.save(taskType("beta", 1));
 
         TaskTypeResponse createdType = taskTypeService.create(
-                new TaskTypeRequest("gamma", "study", "#123456", "notes", true)
+                new TaskTypeRequest("gamma", "study", "#123456", "notes", true, List.of("Study", " study "))
         );
 
         assertThat(createdType.sortOrder()).isEqualTo(2);
+        assertThat(createdType.keywords()).containsExactly("Study");
+    }
+
+    @Test
+    void updateKeywordsRejectsKeywordOwnedByAnotherType() {
+        TaskTypeEntity first = taskTypeRepository.save(taskType("alpha", 0));
+        first.setKeywords(List.of("shared"));
+        taskTypeRepository.save(first);
+        TaskTypeEntity second = taskTypeRepository.save(taskType("beta", 1));
+
+        assertThatThrownBy(() ->
+                taskTypeService.updateKeywords(
+                        second.getId(),
+                        new TaskTypeKeywordsRequest(List.of("SHARED"))
+                )
+        ).hasMessageContaining("SHARED");
     }
 
     private TaskTypeEntity taskType(String name, int sortOrder) {

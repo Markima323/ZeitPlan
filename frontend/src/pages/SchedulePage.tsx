@@ -43,29 +43,6 @@ const EVENING_PREVIEW_START_MINUTES = 17 * 60;
 const EVENING_PREVIEW_END_MINUTES = 3 * 60;
 const EXPORT_PREVIEW_HORIZONTAL_PADDING = 32;
 
-const AUTO_TASK_TYPE_RULES = [
-  {
-    typeAliases: ["兴趣爱好"],
-    keywords: ["roman schreiben", "画画"],
-  },
-  {
-    typeAliases: ["深度工作"],
-    keywords: ["programmieren", "programieren", "开发", "修文", "项目"],
-  },
-  {
-    typeAliases: ["学习输入"],
-    keywords: ["德语", "网课", "学"],
-  },
-  {
-    typeAliases: ["饮食休整"],
-    keywords: ["schlafen gehen", "ausruhen", "kochen", "essen", "吃饭", "午休"],
-  },
-  {
-    typeAliases: ["每日运营", "日常运营"],
-    keywords: ["每日计划", "zähne putzen", "洗澡", "洗衣服", "邮件", "地址", "纸箱", "写信", "快递", "退订"],
-  },
-] as const;
-
 function makeClientId() {
   return crypto.randomUUID();
 }
@@ -104,28 +81,29 @@ function getPreferredDefaultTaskTypeId(taskTypes: TaskTypeResponse[]) {
   );
 }
 
-function findTaskTypeIdByAliases(taskTypes: TaskTypeResponse[], aliases: readonly string[]) {
-  const normalizedAliases = aliases.map(normalizeTaskTypeMatcher);
-  return (
-    taskTypes.find((type) => normalizedAliases.includes(normalizeTaskTypeMatcher(type.name)))?.id ?? null
-  );
-}
-
 function resolveAutoTaskTypeId(title: string, taskTypes: TaskTypeResponse[]) {
   const normalizedTitle = normalizeTaskTypeMatcher(title);
   if (!normalizedTitle) {
     return null;
   }
 
-  for (const rule of AUTO_TASK_TYPE_RULES) {
-    if (!rule.keywords.some((keyword) => normalizedTitle.includes(keyword))) {
-      continue;
-    }
+  const matches = taskTypes.flatMap((taskType) =>
+    taskType.keywords
+      .map((keyword) => normalizeTaskTypeMatcher(keyword))
+      .filter((keyword) => keyword && normalizedTitle.includes(keyword))
+      .map((keyword) => ({
+        taskTypeId: taskType.id,
+        keywordLength: keyword.length,
+        sortOrder: taskType.sortOrder,
+      })),
+  );
 
-    return findTaskTypeIdByAliases(taskTypes, rule.typeAliases);
-  }
+  matches.sort(
+    (left, right) =>
+      right.keywordLength - left.keywordLength || left.sortOrder - right.sortOrder,
+  );
 
-  return null;
+  return matches[0]?.taskTypeId ?? null;
 }
 
 function mergeSavedTaskIds(currentTasks: EditableTask[], savedTasks: PlanTaskResponse[]) {

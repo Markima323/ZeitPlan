@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { Check, GripVertical, PencilLine, Plus, Trash2, X } from "lucide-react";
+import { Check, GripVertical, KeyRound, PencilLine, Plus, Trash2, X } from "lucide-react";
 import { apiClient } from "../api/client";
 import type { TaskTypePayload, TaskTypeResponse } from "../api/types";
 import { getTaskTypeColor, TASK_ICON_CHOICES } from "../lib/taskIconChoices";
@@ -12,6 +12,7 @@ function createInitialForm(): TaskTypePayload {
     colorHex: getTaskTypeColor("sparkles"),
     description: "",
     focusTask: true,
+    keywords: [],
   };
 }
 
@@ -45,6 +46,10 @@ export function TaskTypesPage() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
   const [isReordering, setIsReordering] = useState(false);
+  const [isKeywordModalOpen, setIsKeywordModalOpen] = useState(false);
+  const [keywordDrafts, setKeywordDrafts] = useState<string[]>([]);
+  const [keywordFeedback, setKeywordFeedback] = useState<string | null>(null);
+  const [isSavingKeywords, setIsSavingKeywords] = useState(false);
   const typesRef = useRef<TaskTypeResponse[]>([]);
   const dragStartOrderRef = useRef<TaskTypeResponse[] | null>(null);
 
@@ -92,6 +97,7 @@ export function TaskTypesPage() {
   function resetForm() {
     setForm(createInitialForm());
     setEditingId(null);
+    setIsKeywordModalOpen(false);
   }
 
   async function submit() {
@@ -140,7 +146,70 @@ export function TaskTypesPage() {
       colorHex: type.colorHex || getTaskTypeColor(type.iconKey),
       description: type.description,
       focusTask: type.focusTask,
+      keywords: type.keywords,
     });
+  }
+
+  function openKeywordModal() {
+    setKeywordDrafts(form.keywords.length > 0 ? [...form.keywords] : [""]);
+    setKeywordFeedback(null);
+    setIsKeywordModalOpen(true);
+  }
+
+  function closeKeywordModal() {
+    if (!isSavingKeywords) {
+      setIsKeywordModalOpen(false);
+      setKeywordFeedback(null);
+    }
+  }
+
+  function updateKeywordDraft(index: number, value: string) {
+    setKeywordDrafts((current) =>
+      current.map((keyword, keywordIndex) => (keywordIndex === index ? value : keyword)),
+    );
+  }
+
+  function removeKeywordDraft(index: number) {
+    setKeywordDrafts((current) => current.filter((_, keywordIndex) => keywordIndex !== index));
+  }
+
+  async function saveKeywords() {
+    const normalizedKeywords = keywordDrafts.reduce<string[]>((keywords, keyword) => {
+      const trimmedKeyword = keyword.trim();
+      if (
+        trimmedKeyword &&
+        !keywords.some((existingKeyword) =>
+          existingKeyword.localeCompare(trimmedKeyword, undefined, { sensitivity: "accent" }) === 0
+        )
+      ) {
+        keywords.push(trimmedKeyword);
+      }
+      return keywords;
+    }, []);
+
+    if (editingId === null) {
+      setForm((current) => ({ ...current, keywords: normalizedKeywords }));
+      setIsKeywordModalOpen(false);
+      setFeedback("关键词会在创建任务类型时一并保存");
+      return;
+    }
+
+    setIsSavingKeywords(true);
+    setKeywordFeedback(null);
+
+    try {
+      const updatedType = await apiClient.updateTaskTypeKeywords(editingId, normalizedKeywords);
+      updateTypes((current) =>
+        current.map((type) => (type.id === updatedType.id ? updatedType : type)),
+      );
+      setForm((current) => ({ ...current, keywords: updatedType.keywords }));
+      setIsKeywordModalOpen(false);
+      setFeedback("关键词设置已保存");
+    } catch (error) {
+      setKeywordFeedback(error instanceof Error ? error.message : "保存关键词失败");
+    } finally {
+      setIsSavingKeywords(false);
+    }
   }
 
   function handleDragStart(event: DragEvent<HTMLButtonElement>, typeId: number) {
@@ -250,6 +319,9 @@ export function TaskTypesPage() {
                       <small className="type-focus-note">
                         {type.focusTask ? "计入专注时间统计" : "不计入专注时间统计"}
                       </small>
+                      <small className="type-keyword-note">
+                        {type.keywords.length > 0 ? `${type.keywords.length} 个自动分类关键词` : "未设置关键词"}
+                      </small>
                     </div>
                   </div>
 
@@ -319,6 +391,17 @@ export function TaskTypesPage() {
               取消编辑
             </button>
           ) : null}
+
+          <button
+            className="secondary-button keyword-settings-button"
+            type="button"
+            onClick={openKeywordModal}
+            disabled={isSaving || isReordering}
+          >
+            <KeyRound size={17} />
+            关键词设置
+            <span>{form.keywords.length}</span>
+          </button>
 
           <div className="form-grid">
             <label className="field">
@@ -392,6 +475,98 @@ export function TaskTypesPage() {
           </div>
         </aside>
       </section>
+
+      {isKeywordModalOpen ? (
+        <div
+          className="keyword-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeKeywordModal();
+            }
+          }}
+        >
+          <section
+            className="keyword-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="keyword-modal-title"
+          >
+            <div className="keyword-modal-header">
+              <div>
+                <p className="eyebrow">Keywords</p>
+                <h2 id="keyword-modal-title">关键词设置</h2>
+                <p>
+                  输入任务内容时，只要包含关键词，就会自动选择
+                  “{form.name || "当前任务类型"}”。大小写不影响识别。
+                </p>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="关闭关键词设置"
+                onClick={closeKeywordModal}
+                disabled={isSavingKeywords}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="keyword-editor-list">
+              {keywordDrafts.map((keyword, index) => (
+                <div className="keyword-editor-row" key={index}>
+                  <label className="field">
+                    <span>关键词 {index + 1}</span>
+                    <input
+                      type="text"
+                      value={keyword}
+                      placeholder="例如：开发、Roman schreiben"
+                      autoFocus={index === keywordDrafts.length - 1 && keyword === ""}
+                      onChange={(event) => updateKeywordDraft(index, event.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="icon-button danger"
+                    type="button"
+                    aria-label={`删除关键词 ${index + 1}`}
+                    onClick={() => removeKeywordDraft(index)}
+                    disabled={isSavingKeywords}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
+
+              {keywordDrafts.length === 0 ? (
+                <div className="keyword-empty-state">还没有关键词，点击下方按钮添加第一个。</div>
+              ) : null}
+            </div>
+
+            {keywordFeedback ? <div className="feedback-banner">{keywordFeedback}</div> : null}
+
+            <div className="keyword-modal-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setKeywordDrafts((current) => [...current, ""])}
+                disabled={isSavingKeywords || keywordDrafts.length >= 100}
+              >
+                <Plus size={17} />
+                添加关键词
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => void saveKeywords()}
+                disabled={isSavingKeywords}
+              >
+                <Check size={17} />
+                {isSavingKeywords ? "保存中..." : editingId ? "保存关键词" : "应用关键词"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

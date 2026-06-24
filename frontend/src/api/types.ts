@@ -7,6 +7,7 @@ export interface TaskTypePayload {
   colorHex: string;
   description: string;
   focusTask: boolean;
+  keywords: string[];
 }
 
 export interface TaskTypeResponse extends TaskTypePayload {

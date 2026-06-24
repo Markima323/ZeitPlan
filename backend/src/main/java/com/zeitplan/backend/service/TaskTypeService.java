@@ -1,6 +1,7 @@
 package com.zeitplan.backend.service;
 
 import com.zeitplan.backend.dto.TaskTypeOrderRequest;
+import com.zeitplan.backend.dto.TaskTypeKeywordsRequest;
 import com.zeitplan.backend.dto.TaskTypeRequest;
 import com.zeitplan.backend.dto.TaskTypeResponse;
 import com.zeitplan.backend.entity.TaskTypeEntity;
@@ -12,7 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -51,6 +54,16 @@ public class TaskTypeService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "\u6ca1\u6709\u627e\u5230\u5bf9\u5e94\u7684\u4efb\u52a1\u7c7b\u578b"));
         ensureUniqueName(request.name(), id);
         apply(entity, request);
+        return TaskTypeMapper.toResponse(taskTypeRepository.save(entity));
+    }
+
+    @Transactional
+    public TaskTypeResponse updateKeywords(Long id, TaskTypeKeywordsRequest request) {
+        TaskTypeEntity entity = taskTypeRepository.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "\u6ca1\u6709\u627e\u5230\u5bf9\u5e94\u7684\u4efb\u52a1\u7c7b\u578b"));
+        List<String> keywords = normalizeKeywords(request.keywords());
+        ensureUniqueKeywords(keywords, id);
+        entity.setKeywords(keywords);
         return TaskTypeMapper.toResponse(taskTypeRepository.save(entity));
     }
 
@@ -100,11 +113,56 @@ public class TaskTypeService {
     }
 
     private void apply(TaskTypeEntity entity, TaskTypeRequest request) {
+        List<String> keywords = normalizeKeywords(request.keywords());
+        ensureUniqueKeywords(keywords, entity.getId());
         entity.setName(request.name().trim());
         entity.setIconKey(request.iconKey().trim());
         entity.setColorHex(request.colorHex().trim());
         entity.setDescription(request.description() == null ? "" : request.description().trim());
         entity.setFocusTask(request.focusTask());
+        entity.setKeywords(keywords);
+    }
+
+    private List<String> normalizeKeywords(List<String> keywords) {
+        if (keywords == null) {
+            return List.of();
+        }
+
+        Map<String, String> uniqueKeywords = new LinkedHashMap<>();
+        for (String keyword : keywords) {
+            String trimmedKeyword = keyword.trim();
+            if (!trimmedKeyword.isEmpty()) {
+                uniqueKeywords.putIfAbsent(trimmedKeyword.toLowerCase(Locale.ROOT), trimmedKeyword);
+            }
+        }
+        return List.copyOf(uniqueKeywords.values());
+    }
+
+    private void ensureUniqueKeywords(List<String> keywords, Long currentId) {
+        if (keywords.isEmpty()) {
+            return;
+        }
+
+        Map<String, String> requestedKeywords = keywords.stream()
+                .collect(Collectors.toMap(
+                        keyword -> keyword.toLowerCase(Locale.ROOT),
+                        Function.identity(),
+                        (first, ignored) -> first
+                ));
+
+        taskTypeRepository.findAll().stream()
+                .filter(entity -> currentId == null || !entity.getId().equals(currentId))
+                .forEach(entity -> entity.getKeywords().stream()
+                        .map(keyword -> keyword.toLowerCase(Locale.ROOT))
+                        .filter(requestedKeywords::containsKey)
+                        .findFirst()
+                        .ifPresent(duplicate -> {
+                            throw new ApiException(
+                                    HttpStatus.CONFLICT,
+                                    "\u5173\u952e\u8bcd\u201c" + requestedKeywords.get(duplicate)
+                                            + "\u201d\u5df2\u5c5e\u4e8e\u4efb\u52a1\u7c7b\u578b\u201c" + entity.getName() + "\u201d"
+                            );
+                        }));
     }
 
     private int resolveNextSortOrder() {

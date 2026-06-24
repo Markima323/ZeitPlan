@@ -3,6 +3,8 @@ package com.zeitplan.backend.service.mapper;
 import com.zeitplan.backend.dto.TaskTypeResponse;
 import com.zeitplan.backend.entity.TaskTypeEntity;
 
+import java.util.List;
+
 public final class TaskTypeMapper {
 
     private TaskTypeMapper() {
@@ -16,7 +18,8 @@ public final class TaskTypeMapper {
                 entity.getColorHex(),
                 entity.getDescription(),
                 entity.isFocusTask(),
-                entity.getSortOrder()
+                entity.getSortOrder(),
+                List.copyOf(entity.getKeywords())
         );
     }
 }

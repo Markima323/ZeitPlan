@@ -1,6 +1,7 @@
 package com.zeitplan.backend.controller;
 
 import com.zeitplan.backend.dto.TaskTypeOrderRequest;
+import com.zeitplan.backend.dto.TaskTypeKeywordsRequest;
 import com.zeitplan.backend.dto.TaskTypeRequest;
 import com.zeitplan.backend.dto.TaskTypeResponse;
 import com.zeitplan.backend.service.TaskTypeService;
@@ -44,6 +45,14 @@ public class TaskTypeController {
     @PutMapping("/{id}")
     public TaskTypeResponse update(@PathVariable Long id, @Valid @RequestBody TaskTypeRequest request) {
         return taskTypeService.update(id, request);
+    }
+
+    @PutMapping("/{id}/keywords")
+    public TaskTypeResponse updateKeywords(
+            @PathVariable Long id,
+            @Valid @RequestBody TaskTypeKeywordsRequest request
+    ) {
+        return taskTypeService.updateKeywords(id, request);
     }
 
     @PutMapping("/order")

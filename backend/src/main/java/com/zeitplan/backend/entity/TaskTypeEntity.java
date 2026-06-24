@@ -4,13 +4,20 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "task_types")
@@ -37,6 +44,12 @@ public class TaskTypeEntity {
 
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "task_type_keywords", joinColumns = @JoinColumn(name = "task_type_id"))
+    @OrderColumn(name = "keyword_order")
+    @Column(name = "keyword", nullable = false, length = 120)
+    private List<String> keywords = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -100,5 +113,14 @@ public class TaskTypeEntity {
 
     public void setSortOrder(int sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public List<String> getKeywords() {
+        return keywords;
+    }
+
+    public void setKeywords(List<String> keywords) {
+        this.keywords.clear();
+        this.keywords.addAll(keywords);
     }
 }

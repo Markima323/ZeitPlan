@@ -97,6 +97,12 @@ export const apiClient = {
       body: JSON.stringify(payload),
     });
   },
+  updateTaskTypeKeywords(id: number, keywords: string[]) {
+    return request<TaskTypeResponse>(`/task-types/${id}/keywords`, {
+      method: "PUT",
+      body: JSON.stringify({ keywords }),
+    });
+  },
   reorderTaskTypes(taskTypeIds: number[]) {
     return request<TaskTypeResponse[]>("/task-types/order", {
       method: "PUT",

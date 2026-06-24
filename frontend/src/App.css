@@ -1296,6 +1296,12 @@ button {
   color: var(--muted);
 }
 
+.type-keyword-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--accent-dark);
+}
+
 .stats-grid,
 .dice-status-grid {
   display: grid;
@@ -2001,6 +2007,99 @@ body {
   padding: 8px 10px;
 }
 
+.keyword-settings-button {
+  justify-self: start;
+}
+
+.keyword-settings-button span {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(184, 93, 35, 0.1);
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+}
+
+.keyword-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(54, 38, 24, 0.32);
+  backdrop-filter: blur(10px);
+}
+
+.keyword-modal {
+  width: min(620px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid rgba(238, 199, 151, 0.82);
+  border-radius: 28px;
+  background: #fffaf2;
+  box-shadow: 0 28px 80px rgba(73, 45, 22, 0.22);
+}
+
+.keyword-modal-header,
+.keyword-modal-actions,
+.keyword-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.keyword-modal-header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.keyword-modal-header h2 {
+  margin: 4px 0 8px;
+}
+
+.keyword-modal-header p:last-child {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.keyword-editor-list {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
+}
+
+.keyword-editor-row {
+  align-items: flex-end;
+}
+
+.keyword-editor-row .field {
+  flex: 1;
+}
+
+.keyword-editor-row .icon-button {
+  flex: 0 0 auto;
+  margin-bottom: 2px;
+}
+
+.keyword-empty-state {
+  padding: 24px;
+  border: 1px dashed rgba(117, 87, 54, 0.22);
+  border-radius: 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.keyword-modal-actions {
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
 .icon-picker {
   grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
   gap: 10px;
@@ -2588,6 +2687,28 @@ body {
   .type-row-tail {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .keyword-modal-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .keyword-modal {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 22px 18px;
+    border-radius: 24px;
+  }
+
+  .keyword-modal-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .keyword-modal-actions button {
+    width: 100%;
+    justify-content: center;
   }
 
   .today-focus-shell {
