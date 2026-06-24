@@ -38,7 +38,8 @@ public final class PlanMapper {
                 entity.getTitle(),
                 entity.getTaskType() != null ? entity.getTaskType().getId() : null,
                 entity.getDurationMinutes(),
-                entity.getOrderIndex()
+                entity.getOrderIndex(),
+                entity.isTaskTypeAutoLocked()
         );
     }
 

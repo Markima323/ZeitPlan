@@ -5,6 +5,7 @@ public record PlanTaskResponse(
         String title,
         Long taskTypeId,
         Integer durationMinutes,
-        Integer orderIndex
+        Integer orderIndex,
+        boolean taskTypeAutoLocked
 ) {
 }

@@ -86,6 +86,7 @@ public class DailyPlanService {
             task.setTitle(taskRequest.title() == null || taskRequest.title().isBlank() ? "未命名任务" : taskRequest.title().trim());
             task.setDurationMinutes(taskRequest.durationMinutes());
             task.setOrderIndex(index);
+            task.setTaskTypeAutoLocked(taskRequest.taskTypeAutoLocked() == null || taskRequest.taskTypeAutoLocked());
             entity.getTasks().add(task);
         }
 

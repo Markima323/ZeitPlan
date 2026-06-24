@@ -9,6 +9,7 @@ public record PlanTaskRequest(
         @Size(max = 240) String title,
         Long taskTypeId,
         @Min(10) @Max(1440) Integer durationMinutes,
-        Integer orderIndex
+        Integer orderIndex,
+        Boolean taskTypeAutoLocked
 ) {
 }

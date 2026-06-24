@@ -41,9 +41,37 @@ const DAY_PREVIEW_START_MINUTES = 6 * 60;
 const DAY_PREVIEW_END_MINUTES = 17 * 60;
 const EVENING_PREVIEW_START_MINUTES = 17 * 60;
 const EVENING_PREVIEW_END_MINUTES = 3 * 60;
+const EXPORT_PREVIEW_HORIZONTAL_PADDING = 32;
+
+const AUTO_TASK_TYPE_RULES = [
+  {
+    typeAliases: ["兴趣爱好"],
+    keywords: ["roman schreiben", "画画"],
+  },
+  {
+    typeAliases: ["深度工作"],
+    keywords: ["programmieren", "programieren", "开发", "修文", "项目"],
+  },
+  {
+    typeAliases: ["学习输入"],
+    keywords: ["德语", "网课", "学"],
+  },
+  {
+    typeAliases: ["饮食休整"],
+    keywords: ["schlafen gehen", "ausruhen", "kochen", "essen", "吃饭", "午休"],
+  },
+  {
+    typeAliases: ["每日运营", "日常运营"],
+    keywords: ["每日计划", "zähne putzen", "洗澡", "洗衣服", "邮件", "地址", "纸箱", "写信", "快递", "退订"],
+  },
+] as const;
 
 function makeClientId() {
   return crypto.randomUUID();
+}
+
+function normalizeTaskTypeMatcher(value: string) {
+  return value.trim().toLocaleLowerCase();
 }
 
 function isWithinPreviewRange(minutes: number, rangeStartMinutes: number, rangeEndMinutes: number) {
@@ -76,6 +104,30 @@ function getPreferredDefaultTaskTypeId(taskTypes: TaskTypeResponse[]) {
   );
 }
 
+function findTaskTypeIdByAliases(taskTypes: TaskTypeResponse[], aliases: readonly string[]) {
+  const normalizedAliases = aliases.map(normalizeTaskTypeMatcher);
+  return (
+    taskTypes.find((type) => normalizedAliases.includes(normalizeTaskTypeMatcher(type.name)))?.id ?? null
+  );
+}
+
+function resolveAutoTaskTypeId(title: string, taskTypes: TaskTypeResponse[]) {
+  const normalizedTitle = normalizeTaskTypeMatcher(title);
+  if (!normalizedTitle) {
+    return null;
+  }
+
+  for (const rule of AUTO_TASK_TYPE_RULES) {
+    if (!rule.keywords.some((keyword) => normalizedTitle.includes(keyword))) {
+      continue;
+    }
+
+    return findTaskTypeIdByAliases(taskTypes, rule.typeAliases);
+  }
+
+  return null;
+}
+
 function mergeSavedTaskIds(currentTasks: EditableTask[], savedTasks: PlanTaskResponse[]) {
   const savedTaskIdsByOrder = new Map(
     [...savedTasks]
@@ -100,16 +152,50 @@ function mergeSavedTaskIds(currentTasks: EditableTask[], savedTasks: PlanTaskRes
   return changed ? nextTasks : currentTasks;
 }
 
-function measureExportPreviewSize(sourceNode: HTMLDivElement) {
+function createExportPreviewNode(sourceNode: HTMLDivElement) {
+  const wrapper = document.createElement("div");
+  const clone = sourceNode.cloneNode(true) as HTMLDivElement;
   const sourceTable = sourceNode.querySelector("table");
+  const sourceTableWidth = sourceTable instanceof HTMLElement ? Math.ceil(sourceTable.scrollWidth) : 0;
   const exportWidth = Math.max(
     Math.ceil(sourceNode.getBoundingClientRect().width),
-    sourceTable instanceof HTMLElement ? Math.ceil(sourceTable.scrollWidth) + 32 : 0,
+    sourceTableWidth + EXPORT_PREVIEW_HORIZONTAL_PADDING,
   );
 
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-10000px";
+  wrapper.style.top = "0";
+  wrapper.style.zIndex = "-1";
+  wrapper.style.visibility = "hidden";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.background = "#fffaf2";
+  wrapper.style.width = `${exportWidth}px`;
+
+  clone.style.width = `${exportWidth}px`;
+  clone.style.maxWidth = "none";
+  clone.style.overflow = "visible";
+
+  clone.querySelectorAll<HTMLElement>(".table-shell").forEach((shell) => {
+    shell.style.width = `${Math.max(sourceTableWidth, exportWidth - EXPORT_PREVIEW_HORIZONTAL_PADDING)}px`;
+    shell.style.maxWidth = "none";
+    shell.style.overflow = "visible";
+  });
+
+  clone.querySelectorAll<HTMLElement>("table").forEach((table) => {
+    const tableWidth = Math.max(Math.ceil(table.scrollWidth), sourceTableWidth);
+    table.style.width = `${tableWidth}px`;
+    table.style.minWidth = `${tableWidth}px`;
+    table.style.maxWidth = "none";
+  });
+
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
   return {
-    width: exportWidth,
-    height: Math.max(Math.ceil(sourceNode.scrollHeight), Math.ceil(sourceNode.getBoundingClientRect().height)),
+    wrapper,
+    node: clone,
+    width: Math.max(exportWidth, Math.ceil(clone.scrollWidth)),
+    height: Math.ceil(clone.scrollHeight),
   };
 }
 
@@ -301,6 +387,7 @@ export function SchedulePage({
             taskTypeId: task.taskTypeId,
             durationMinutes: task.durationMinutes,
             orderIndex: index,
+            taskTypeAutoLocked: task.taskTypeAutoLocked,
           })),
         });
 
@@ -428,6 +515,7 @@ export function SchedulePage({
       taskTypeId: defaultTypeId,
       durationMinutes: 30,
       orderIndex: afterIndex + 1,
+      taskTypeAutoLocked: false,
     };
 
     setTasks((current) => {
@@ -456,6 +544,39 @@ export function SchedulePage({
   function updateTask(clientId: string, changes: Partial<EditableTask>) {
     setTasks((current) =>
       current.map((task) => (task.clientId === clientId ? { ...task, ...changes } : task)),
+    );
+    markDirty();
+  }
+
+  function updateTaskTitle(clientId: string, nextTitle: string) {
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.clientId !== clientId) {
+          return task;
+        }
+
+        if (task.taskTypeAutoLocked) {
+          return {
+            ...task,
+            title: nextTitle,
+          };
+        }
+
+        const matchedTaskTypeId = resolveAutoTaskTypeId(nextTitle, taskTypes);
+        if (matchedTaskTypeId == null) {
+          return {
+            ...task,
+            title: nextTitle,
+          };
+        }
+
+        return {
+          ...task,
+          title: nextTitle,
+          taskTypeId: matchedTaskTypeId,
+          taskTypeAutoLocked: true,
+        };
+      }),
     );
     markDirty();
   }
@@ -512,6 +633,8 @@ export function SchedulePage({
     setCopyingTarget(target);
     setFeedback(null);
 
+    let exportSnapshot: ReturnType<typeof createExportPreviewNode> | null = null;
+
     try {
       const fontEmbedCSS =
         previewFontEmbedCssRef.current ??
@@ -520,18 +643,13 @@ export function SchedulePage({
         });
       previewFontEmbedCssRef.current = fontEmbedCSS;
 
-      const exportSize = measureExportPreviewSize(previewNode);
+      exportSnapshot = createExportPreviewNode(previewNode);
 
-      const blob = await toBlob(previewNode, {
+      const blob = await toBlob(exportSnapshot.node, {
         backgroundColor: "#fffaf2",
         pixelRatio: 1.5,
-        width: exportSize.width,
-        height: exportSize.height,
-        style: {
-          width: `${exportSize.width}px`,
-          maxWidth: "none",
-          overflow: "visible",
-        },
+        width: exportSnapshot.width,
+        height: exportSnapshot.height,
         preferredFontFormat: "woff2",
         fontEmbedCSS,
       });
@@ -550,6 +668,7 @@ export function SchedulePage({
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "复制失败");
     } finally {
+      exportSnapshot?.wrapper.remove();
       setCopyingTarget(null);
     }
   }
@@ -693,7 +812,7 @@ export function SchedulePage({
                               type="text"
                               value={task.title}
                               placeholder="例如：复盘昨日数据、写 PRD、录音练习"
-                              onChange={(event) => updateTask(task.clientId, { title: event.target.value })}
+                              onChange={(event) => updateTaskTitle(task.clientId, event.target.value)}
                             />
                           </label>
 
@@ -704,6 +823,7 @@ export function SchedulePage({
                               onChange={(event) =>
                                 updateTask(task.clientId, {
                                   taskTypeId: event.target.value ? Number(event.target.value) : null,
+                                  taskTypeAutoLocked: true,
                                 })
                               }
                             >

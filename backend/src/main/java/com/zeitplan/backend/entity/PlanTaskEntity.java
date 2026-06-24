@@ -35,6 +35,9 @@ public class PlanTaskEntity {
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex;
 
+    @Column(name = "task_type_auto_locked", nullable = false)
+    private boolean taskTypeAutoLocked = true;
+
     public Long getId() {
         return id;
     }
@@ -81,5 +84,13 @@ public class PlanTaskEntity {
 
     public void setOrderIndex(Integer orderIndex) {
         this.orderIndex = orderIndex;
+    }
+
+    public boolean isTaskTypeAutoLocked() {
+        return taskTypeAutoLocked;
+    }
+
+    public void setTaskTypeAutoLocked(boolean taskTypeAutoLocked) {
+        this.taskTypeAutoLocked = taskTypeAutoLocked;
     }
 }

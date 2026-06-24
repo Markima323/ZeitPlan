@@ -20,6 +20,7 @@ export interface PlanTaskResponse {
   taskTypeId: number | null;
   durationMinutes: number;
   orderIndex: number;
+  taskTypeAutoLocked: boolean;
 }
 
 export interface DailyPlanResponse {
