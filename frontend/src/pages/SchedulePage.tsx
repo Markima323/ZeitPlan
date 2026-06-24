@@ -166,7 +166,6 @@ function createExportPreviewNode(sourceNode: HTMLDivElement) {
   wrapper.style.left = "-10000px";
   wrapper.style.top = "0";
   wrapper.style.zIndex = "-1";
-  wrapper.style.visibility = "hidden";
   wrapper.style.pointerEvents = "none";
   wrapper.style.background = "#fffaf2";
   wrapper.style.width = `${exportWidth}px`;
