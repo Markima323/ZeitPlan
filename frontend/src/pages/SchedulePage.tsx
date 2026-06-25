@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Copy, PencilLine, Plus, Trash2 } from "lucide-react";
-import { getFontEmbedCSS, toBlob } from "html-to-image";
+import { toBlob } from "html-to-image";
 import { apiClient } from "../api/client";
 import type {
   DailyPlanResponse,
@@ -42,6 +42,8 @@ const DAY_PREVIEW_END_MINUTES = 17 * 60;
 const EVENING_PREVIEW_START_MINUTES = 17 * 60;
 const EVENING_PREVIEW_END_MINUTES = 3 * 60;
 const EXPORT_PREVIEW_HORIZONTAL_PADDING = 32;
+const EXPORT_FONT_FAMILY =
+  '"Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", Arial, sans-serif';
 
 function makeClientId() {
   return crypto.randomUUID();
@@ -65,6 +67,7 @@ function toEditableTasks(tasks: PlanTaskResponse[], resetTaskIds = false): Edita
     .map((task) => ({
       ...task,
       id: resetTaskIds ? null : task.id,
+      taskTypeAutoLocked: resetTaskIds ? false : task.taskTypeAutoLocked,
       clientId: makeClientId(),
     }));
 }
@@ -151,6 +154,23 @@ function createExportPreviewNode(sourceNode: HTMLDivElement) {
   clone.style.width = `${exportWidth}px`;
   clone.style.maxWidth = "none";
   clone.style.overflow = "visible";
+  clone.style.fontFamily = EXPORT_FONT_FAMILY;
+  clone.style.fontSynthesis = "weight";
+
+  clone.querySelectorAll<HTMLElement>("*").forEach((element) => {
+    element.style.fontFamily = EXPORT_FONT_FAMILY;
+    element.style.fontSynthesis = "weight";
+  });
+
+  clone.querySelectorAll<HTMLElement>(".task-copy strong").forEach((title) => {
+    title.style.fontWeight = "700";
+    title.style.letterSpacing = "normal";
+  });
+
+  clone.querySelectorAll<HTMLElement>(".task-copy small").forEach((typeName) => {
+    typeName.style.fontWeight = "600";
+    typeName.style.letterSpacing = "normal";
+  });
 
   clone.querySelectorAll<HTMLElement>(".table-shell").forEach((shell) => {
     shell.style.width = `${Math.max(sourceTableWidth, exportWidth - EXPORT_PREVIEW_HORIZONTAL_PADDING)}px`;
@@ -222,7 +242,6 @@ export function SchedulePage({
   const taskCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const lastAppliedSeasonRef = useRef<SeasonMode>(seasonMode);
   const saveVersionRef = useRef(0);
-  const previewFontEmbedCssRef = useRef<string | null>(null);
 
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [dayStartLocalTime, setDayStartLocalTime] = useState("10:00");
@@ -305,41 +324,6 @@ export function SchedulePage({
       window.clearTimeout(timeoutId);
     };
   }, [isLoading, seasonMode]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function warmPreviewFontCache() {
-      if (previewFontEmbedCssRef.current) {
-        return;
-      }
-
-      const previewNode = dayPreviewRef.current ?? eveningPreviewRef.current;
-      if (!previewNode) {
-        return;
-      }
-
-      try {
-        const nextFontEmbedCss = await getFontEmbedCSS(previewNode, {
-          preferredFontFormat: "woff2",
-        });
-        if (!cancelled) {
-          previewFontEmbedCssRef.current = nextFontEmbedCss;
-        }
-      } catch {
-        // Ignore warm-up failures and use the default export path instead.
-      }
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void warmPreviewFontCache();
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [isLoading, selectedDate, tasks.length]);
 
   useEffect(() => {
     if (isLoading || !isDirty) {
@@ -613,13 +597,6 @@ export function SchedulePage({
     let exportSnapshot: ReturnType<typeof createExportPreviewNode> | null = null;
 
     try {
-      const fontEmbedCSS =
-        previewFontEmbedCssRef.current ??
-        await getFontEmbedCSS(previewNode, {
-          preferredFontFormat: "woff2",
-        });
-      previewFontEmbedCssRef.current = fontEmbedCSS;
-
       exportSnapshot = createExportPreviewNode(previewNode);
 
       const blob = await toBlob(exportSnapshot.node, {
@@ -627,8 +604,7 @@ export function SchedulePage({
         pixelRatio: 1.5,
         width: exportSnapshot.width,
         height: exportSnapshot.height,
-        preferredFontFormat: "woff2",
-        fontEmbedCSS,
+        fontEmbedCSS: "",
       });
 
       if (!blob) {
