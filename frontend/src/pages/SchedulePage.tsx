@@ -42,6 +42,8 @@ const DAY_PREVIEW_END_MINUTES = 17 * 60;
 const EVENING_PREVIEW_START_MINUTES = 17 * 60;
 const EVENING_PREVIEW_END_MINUTES = 3 * 60;
 const EXPORT_PREVIEW_HORIZONTAL_PADDING = 32;
+const DAY_EXPORT_TABLE_MIN_WIDTH = 900;
+const NIGHT_EXPORT_TABLE_MIN_WIDTH = 560;
 const EXPORT_FONT_FAMILY =
   '"Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", Arial, sans-serif';
 
@@ -137,12 +139,17 @@ function createExportPreviewNode(sourceNode: HTMLDivElement) {
   const wrapper = document.createElement("div");
   const clone = sourceNode.cloneNode(true) as HTMLDivElement;
   const sourceTable = sourceNode.querySelector("table");
+  const sourceTableMinWidth = sourceTable?.classList.contains("night-preview-table")
+    ? NIGHT_EXPORT_TABLE_MIN_WIDTH
+    : DAY_EXPORT_TABLE_MIN_WIDTH;
   const sourceTableWidth = sourceTable instanceof HTMLElement ? Math.ceil(sourceTable.scrollWidth) : 0;
   const exportWidth = Math.max(
     Math.ceil(sourceNode.getBoundingClientRect().width),
+    sourceTableMinWidth + EXPORT_PREVIEW_HORIZONTAL_PADDING,
     sourceTableWidth + EXPORT_PREVIEW_HORIZONTAL_PADDING,
   );
 
+  wrapper.className = "planner-preview-panel export-preview-host";
   wrapper.style.position = "fixed";
   wrapper.style.left = "-10000px";
   wrapper.style.top = "0";
@@ -162,24 +169,49 @@ function createExportPreviewNode(sourceNode: HTMLDivElement) {
     element.style.fontSynthesis = "weight";
   });
 
+  clone.querySelectorAll<HTMLElement>(".task-cell").forEach((cell) => {
+    cell.style.width = "100%";
+    cell.style.display = "inline-flex";
+    cell.style.alignItems = "center";
+    cell.style.justifyContent = "center";
+    cell.style.gap = "10px";
+  });
+
+  clone.querySelectorAll<HTMLElement>(".task-copy").forEach((copy) => {
+    copy.style.display = "inline-flex";
+    copy.style.flexDirection = "column";
+    copy.style.alignItems = "center";
+    copy.style.justifyContent = "center";
+    copy.style.gap = "3px";
+    copy.style.minWidth = "0";
+    copy.style.lineHeight = "1.35";
+    copy.style.textAlign = "center";
+  });
+
   clone.querySelectorAll<HTMLElement>(".task-copy strong").forEach((title) => {
+    title.style.display = "block";
     title.style.fontWeight = "700";
     title.style.letterSpacing = "normal";
+    title.style.lineHeight = "1.38";
+    title.style.whiteSpace = "nowrap";
   });
 
   clone.querySelectorAll<HTMLElement>(".task-copy small").forEach((typeName) => {
+    typeName.style.display = "block";
     typeName.style.fontWeight = "600";
     typeName.style.letterSpacing = "normal";
+    typeName.style.lineHeight = "1.25";
+    typeName.style.whiteSpace = "nowrap";
   });
 
   clone.querySelectorAll<HTMLElement>(".table-shell").forEach((shell) => {
-    shell.style.width = `${Math.max(sourceTableWidth, exportWidth - EXPORT_PREVIEW_HORIZONTAL_PADDING)}px`;
+    shell.style.width = `${Math.max(sourceTableMinWidth, sourceTableWidth, exportWidth - EXPORT_PREVIEW_HORIZONTAL_PADDING)}px`;
     shell.style.maxWidth = "none";
     shell.style.overflow = "visible";
   });
 
   clone.querySelectorAll<HTMLElement>("table").forEach((table) => {
-    const tableWidth = Math.max(Math.ceil(table.scrollWidth), sourceTableWidth);
+    const tableWidth = Math.max(Math.ceil(table.scrollWidth), sourceTableMinWidth, sourceTableWidth);
     table.style.width = `${tableWidth}px`;
     table.style.minWidth = `${tableWidth}px`;
     table.style.maxWidth = "none";
