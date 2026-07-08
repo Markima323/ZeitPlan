@@ -4,6 +4,7 @@ set -u
 WIDTH="${WIDTH:-600}"
 HEIGHT="${HEIGHT:-800}"
 AUTO_DETECT_SCREEN_SIZE="${AUTO_DETECT_SCREEN_SIZE:-1}"
+DISPLAY_MODE="${DISPLAY_MODE:-eips_plain}"
 STATE_DIR="${STATE_DIR:-/mnt/us/home-kindle-today-plan/state}"
 SCREEN_PATH="${SCREEN_PATH:-/mnt/us/home-kindle-today-plan/current.png}"
 CONFIG_FILE="${CONFIG_FILE:-/mnt/us/home-kindle-today-plan/config.sh}"
@@ -104,6 +105,29 @@ file_header_hex() {
 
 is_png_file() {
   [ "$(file_header_hex "$1")" = "89504e470d0a1a0a" ]
+}
+
+display_screen() {
+  case "$DISPLAY_MODE" in
+    fbink)
+      if command -v fbink >/dev/null 2>&1; then
+        fbink -c
+        fbink -g "$SCREEN_PATH"
+        return "$?"
+      fi
+      log "fbink not found. falling back to eips_plain."
+      eips -c
+      eips -g "$SCREEN_PATH"
+      ;;
+    eips_xy)
+      eips -c
+      eips -g "$SCREEN_PATH" -x 0 -y 0
+      ;;
+    *)
+      eips -c
+      eips -g "$SCREEN_PATH"
+      ;;
+  esac
 }
 
 request_pull() {
@@ -225,12 +249,11 @@ while true; do
       continue
     fi
 
-    eips -c
-    if eips -g "$SCREEN_PATH" -x 0 -y 0; then
+    if display_screen; then
       VERSION="$NEW_VERSION"
       echo "$VERSION" > "$VERSION_FILE"
       ERROR_COUNT=0
-      log "Screen rendered successfully. version=$VERSION path=$SCREEN_PATH header=$IMAGE_HEADER"
+      log "Screen rendered successfully. version=$VERSION path=$SCREEN_PATH header=$IMAGE_HEADER display_mode=$DISPLAY_MODE"
     else
       log "Screen render failed. path=$SCREEN_PATH header=$IMAGE_HEADER"
       sleep "$(backoff_seconds "$ERROR_COUNT")"

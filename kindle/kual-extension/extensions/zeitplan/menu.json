@@ -25,9 +25,33 @@
       "date": true
     },
     {
+      "name": "ZeitPlan: Display current",
+      "action": "sh ./bin/display-current.sh eips_plain",
+      "priority": -7,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
+      "name": "ZeitPlan: Display current XY",
+      "action": "sh ./bin/display-current.sh eips_xy",
+      "priority": -6,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
+      "name": "ZeitPlan: Display current FBInk",
+      "action": "sh ./bin/display-current.sh fbink",
+      "priority": -5,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
       "name": "ZeitPlan: Export log to documents",
       "action": "sh ./bin/export-log.sh",
-      "priority": -7,
+      "priority": -4,
       "exitmenu": false,
       "status": false,
       "date": true
