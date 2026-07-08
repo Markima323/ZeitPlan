@@ -49,9 +49,33 @@
       "date": true
     },
     {
+      "name": "ZeitPlan: Display full test",
+      "action": "sh ./bin/display-current.sh eips_plain display-test-full.png",
+      "priority": -4,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
+      "name": "ZeitPlan: Display half test",
+      "action": "sh ./bin/display-current.sh eips_plain display-test-half.png",
+      "priority": -3,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
+      "name": "ZeitPlan: Display diagnostics",
+      "action": "sh ./bin/diagnose-display.sh",
+      "priority": -2,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
       "name": "ZeitPlan: Export log to documents",
       "action": "sh ./bin/export-log.sh",
-      "priority": -4,
+      "priority": -1,
       "exitmenu": false,
       "status": false,
       "date": true

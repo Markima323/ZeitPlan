@@ -2,7 +2,6 @@ package com.zeitplan.backend.service;
 
 import org.springframework.stereotype.Service;
 
-import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
@@ -11,12 +10,16 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.zip.CRC32;
+import java.util.zip.DeflaterOutputStream;
 
 @Service
 public class KindleScreenRenderer {
@@ -84,14 +87,80 @@ public class KindleScreenRenderer {
             drawText(graphics, "\u6700\u8fd1\u66f4\u65b0\uff1a" + snapshot.generatedAt().format(DateTimeFormatter.ofPattern("HH:mm")), margin, footerY, footerFont, contentWidth);
             drawUpdateHint(graphics, width, height, margin, footerFont);
 
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            ImageIO.write(image, "png", output);
-            return output.toByteArray();
+            return writeFourBitGrayscalePng(image);
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to render Kindle screen", exception);
         } finally {
             graphics.dispose();
         }
+    }
+
+    private byte[] writeFourBitGrayscalePng(BufferedImage source) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        DataOutputStream data = new DataOutputStream(output);
+        data.write(new byte[] {
+                (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
+        });
+
+        ByteArrayOutputStream ihdrBytes = new ByteArrayOutputStream(13);
+        DataOutputStream ihdr = new DataOutputStream(ihdrBytes);
+        ihdr.writeInt(source.getWidth());
+        ihdr.writeInt(source.getHeight());
+        ihdr.writeByte(4);
+        ihdr.writeByte(0);
+        ihdr.writeByte(0);
+        ihdr.writeByte(0);
+        ihdr.writeByte(0);
+        writePngChunk(data, "IHDR", ihdrBytes.toByteArray());
+
+        int rowByteCount = (source.getWidth() + 1) / 2;
+        ByteArrayOutputStream rawImage = new ByteArrayOutputStream((rowByteCount + 1) * source.getHeight());
+        byte[] row = new byte[rowByteCount];
+        for (int y = 0; y < source.getHeight(); y += 1) {
+            rawImage.write(0);
+            for (int index = 0; index < row.length; index += 1) {
+                row[index] = 0;
+            }
+
+            for (int x = 0; x < source.getWidth(); x += 1) {
+                int level = grayLevel(source.getRGB(x, y));
+                int rowIndex = x / 2;
+                if (x % 2 == 0) {
+                    row[rowIndex] = (byte) (level << 4);
+                } else {
+                    row[rowIndex] = (byte) (row[rowIndex] | level);
+                }
+            }
+            rawImage.write(row);
+        }
+
+        ByteArrayOutputStream compressedImage = new ByteArrayOutputStream();
+        try (DeflaterOutputStream deflater = new DeflaterOutputStream(compressedImage)) {
+            rawImage.writeTo(deflater);
+        }
+        writePngChunk(data, "IDAT", compressedImage.toByteArray());
+        writePngChunk(data, "IEND", new byte[0]);
+        return output.toByteArray();
+    }
+
+    private int grayLevel(int rgb) {
+        int red = (rgb >> 16) & 0xff;
+        int green = (rgb >> 8) & 0xff;
+        int blue = rgb & 0xff;
+        int luminance = ((red * 299) + (green * 587) + (blue * 114) + 500) / 1000;
+        return Math.max(0, Math.min(15, (luminance + 8) / 17));
+    }
+
+    private void writePngChunk(DataOutputStream output, String type, byte[] payload) throws IOException {
+        byte[] typeBytes = type.getBytes(StandardCharsets.US_ASCII);
+        output.writeInt(payload.length);
+        output.write(typeBytes);
+        output.write(payload);
+
+        CRC32 crc32 = new CRC32();
+        crc32.update(typeBytes);
+        crc32.update(payload);
+        output.writeInt((int) crc32.getValue());
     }
 
     private String weekday(KindleTodaySnapshot snapshot) {

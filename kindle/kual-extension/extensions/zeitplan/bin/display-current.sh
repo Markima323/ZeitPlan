@@ -6,12 +6,20 @@ CONFIG_FILE="$APP_DIR/config.sh"
 SCREEN_PATH="$APP_DIR/current.png"
 LOG_FILE="$STATE_DIR/kindle.log"
 MODE="${1:-eips_plain}"
+IMAGE_FILE="${2:-}"
 
 mkdir -p "$STATE_DIR"
 
 if [ -f "$CONFIG_FILE" ]; then
   # shellcheck disable=SC1090
   . "$CONFIG_FILE"
+fi
+
+if [ -n "$IMAGE_FILE" ]; then
+  case "$IMAGE_FILE" in
+    /*) SCREEN_PATH="$IMAGE_FILE" ;;
+    *) SCREEN_PATH="$APP_DIR/$IMAGE_FILE" ;;
+  esac
 fi
 
 log() {
