@@ -96,6 +96,19 @@ public class KindleController {
         return kindlePushService.getScreenImage(screenId, deviceId, version, width, height, expires, signature);
     }
 
+    @GetMapping({"/kindle/screens/{screenId}.pdf", "/api/kindle/screens/{screenId}.pdf"})
+    public ResponseEntity<byte[]> getScreenDocument(
+            @PathVariable String screenId,
+            @RequestParam("device") String deviceId,
+            @RequestParam("v") int version,
+            @RequestParam("w") int width,
+            @RequestParam("h") int height,
+            @RequestParam("expires") long expires,
+            @RequestParam("sig") String signature
+    ) {
+        return kindlePushService.getScreenDocument(screenId, deviceId, version, width, height, expires, signature);
+    }
+
     @GetMapping("/api/kindle/devices")
     public KindleDevicesResponse getDevices() {
         return kindlePushService.getDevices();

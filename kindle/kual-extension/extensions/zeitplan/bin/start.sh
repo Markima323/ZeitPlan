@@ -4,6 +4,7 @@ APP_DIR="/mnt/us/home-kindle-today-plan"
 STATE_DIR="$APP_DIR/state"
 SCRIPT="$APP_DIR/home-kindle-today-plan.sh"
 SCREEN_PATH="$APP_DIR/current.png"
+CONFIG_FILE="$APP_DIR/config.sh"
 TOUCH_SCRIPT="/mnt/us/extensions/zeitplan/bin/touch-buttons.sh"
 PID_FILE="$STATE_DIR/zeitplan.pid"
 TOUCH_PID_FILE="$STATE_DIR/touch.pid"
@@ -11,6 +12,12 @@ LOG_FILE="$STATE_DIR/kindle.log"
 STOP_FILE="$STATE_DIR/stop"
 
 mkdir -p "$STATE_DIR"
+
+OPEN_AS_BOOK="${OPEN_AS_BOOK:-0}"
+if [ -f "$CONFIG_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$CONFIG_FILE"
+fi
 
 show_message() {
   if command -v eips >/dev/null 2>&1; then
@@ -24,6 +31,10 @@ show_message() {
 }
 
 render_current_screen() {
+  if [ "$OPEN_AS_BOOK" = "1" ]; then
+    return 0
+  fi
+
   if command -v eips >/dev/null 2>&1 && [ -f "$SCREEN_PATH" ]; then
     eips -c
     sleep 1
@@ -32,6 +43,10 @@ render_current_screen() {
 }
 
 schedule_post_kual_redraw() {
+  if [ "$OPEN_AS_BOOK" = "1" ]; then
+    return 0
+  fi
+
   if command -v eips >/dev/null 2>&1 && [ -f "$SCREEN_PATH" ]; then
     (
       sleep 2
@@ -86,7 +101,7 @@ nohup sh "$SCRIPT" >> "$LOG_FILE" 2>&1 &
 echo "$!" > "$PID_FILE"
 echo "$(date '+%Y-%m-%d %H:%M:%S') Started ZeitPlan client. pid=$!" >> "$LOG_FILE"
 
-if [ -f "$TOUCH_SCRIPT" ]; then
+if [ "$OPEN_AS_BOOK" != "1" ] && [ -f "$TOUCH_SCRIPT" ]; then
   nohup sh "$TOUCH_SCRIPT" >> "$LOG_FILE" 2>&1 &
   echo "$!" > "$TOUCH_PID_FILE"
   echo "$(date '+%Y-%m-%d %H:%M:%S') Started ZeitPlan touch controls. pid=$!" >> "$LOG_FILE"

@@ -7,8 +7,11 @@ AUTO_DETECT_SCREEN_SIZE="${AUTO_DETECT_SCREEN_SIZE:-1}"
 DISPLAY_MODE="${DISPLAY_MODE:-eips_plain}"
 STARTUP_PULL="${STARTUP_PULL:-0}"
 DISPLAY_CLEAR_DELAY="${DISPLAY_CLEAR_DELAY:-1}"
+OPEN_AS_BOOK="${OPEN_AS_BOOK:-1}"
 STATE_DIR="${STATE_DIR:-/mnt/us/home-kindle-today-plan/state}"
 SCREEN_PATH="${SCREEN_PATH:-/mnt/us/home-kindle-today-plan/current.png}"
+DOCUMENT_DIR="${DOCUMENT_DIR:-/mnt/us/documents}"
+DOCUMENT_PREFIX="${DOCUMENT_PREFIX:-ZeitPlan_Today}"
 CONFIG_FILE="${CONFIG_FILE:-/mnt/us/home-kindle-today-plan/config.sh}"
 LOG_FILE="${LOG_FILE:-$STATE_DIR/kindle.log}"
 VERSION_FILE="$STATE_DIR/version"
@@ -107,6 +110,24 @@ file_header_hex() {
 
 is_png_file() {
   [ "$(file_header_hex "$1")" = "89504e470d0a1a0a" ]
+}
+
+is_pdf_file() {
+  [ "$(file_header_hex "$1" | cut -c1-10)" = "255044462d" ]
+}
+
+open_document() {
+  if ! command -v lipc-set-prop >/dev/null 2>&1; then
+    log "Reader open failed. lipc-set-prop command not found."
+    return 1
+  fi
+
+  lipc-set-prop com.lab126.appmgrd start "app://com.lab126.booklet.reader:$1"
+}
+
+cleanup_old_documents() {
+  keep_file="$1"
+  find "$DOCUMENT_DIR" -maxdepth 1 -name "${DOCUMENT_PREFIX}_*.pdf" ! -name "$(basename "$keep_file")" -delete 2>/dev/null || true
 }
 
 display_screen() {
@@ -225,9 +246,42 @@ while true; do
   TYPE="$(json_get type)"
   NEW_VERSION="$(json_get_number version)"
   IMAGE_URL="$(json_get image_url)"
+  DOCUMENT_URL="$(json_get document_url)"
 
   if [ "$TYPE" = "screen.update" ] && [ -n "$NEW_VERSION" ] && [ "$NEW_VERSION" != "$VERSION" ] && [ -n "$IMAGE_URL" ]; then
     log "Screen update received. version=$NEW_VERSION image_url=$IMAGE_URL"
+    if [ "$OPEN_AS_BOOK" = "1" ] && [ -n "$DOCUMENT_URL" ]; then
+      mkdir -p "$DOCUMENT_DIR"
+      DOCUMENT_PATH="$DOCUMENT_DIR/${DOCUMENT_PREFIX}_${NEW_VERSION}.pdf"
+      curl \
+        --silent \
+        --show-error \
+        --location \
+        --max-time 30 \
+        --output "$DOCUMENT_PATH" \
+        --write-out "%{http_code}" \
+        "$DOCUMENT_URL" > "$IMAGE_HTTP_FILE"
+
+      DOCUMENT_CURL_EXIT="$?"
+      DOCUMENT_HTTP_CODE="$(cat "$IMAGE_HTTP_FILE" 2>/dev/null || echo 000)"
+      DOCUMENT_HEADER="$(file_header_hex "$DOCUMENT_PATH")"
+
+      if [ "$DOCUMENT_CURL_EXIT" = "0" ] && [ "$DOCUMENT_HTTP_CODE" = "200" ] && is_pdf_file "$DOCUMENT_PATH"; then
+        if open_document "$DOCUMENT_PATH"; then
+          VERSION="$NEW_VERSION"
+          echo "$VERSION" > "$VERSION_FILE"
+          ERROR_COUNT=0
+          cleanup_old_documents "$DOCUMENT_PATH"
+          log "Screen opened in Kindle reader successfully. version=$VERSION path=$DOCUMENT_PATH header=$DOCUMENT_HEADER"
+          continue
+        fi
+
+        log "Reader open failed. falling back to PNG. path=$DOCUMENT_PATH header=$DOCUMENT_HEADER"
+      else
+        log "Screen document download failed. curl_exit=$DOCUMENT_CURL_EXIT http_code=$DOCUMENT_HTTP_CODE header=$DOCUMENT_HEADER document_url=$DOCUMENT_URL"
+      fi
+    fi
+
     curl \
       --silent \
       --show-error \

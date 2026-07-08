@@ -9,6 +9,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -20,10 +21,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.zip.CRC32;
 import java.util.zip.DeflaterOutputStream;
+import javax.imageio.ImageIO;
 
 @Service
 public class KindleScreenRenderer {
 
+    private static final double KINDLE_POINTS_PER_PIXEL = 72.0 / 300.0;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -95,6 +98,19 @@ public class KindleScreenRenderer {
         }
     }
 
+    public byte[] wrapPngAsPdf(byte[] pngBytes) {
+        try {
+            BufferedImage image = ImageIO.read(new ByteArrayInputStream(pngBytes));
+            if (image == null) {
+                throw new IllegalArgumentException("Kindle PNG could not be decoded");
+            }
+
+            return writePdf(image);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Unable to wrap Kindle screen as PDF", exception);
+        }
+    }
+
     private byte[] writeEightBitGrayscalePng(BufferedImage source) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         DataOutputStream data = new DataOutputStream(output);
@@ -138,6 +154,80 @@ public class KindleScreenRenderer {
         int green = (rgb >> 8) & 0xff;
         int blue = rgb & 0xff;
         return ((red * 299) + (green * 587) + (blue * 114) + 500) / 1000;
+    }
+
+    private byte[] writePdf(BufferedImage source) throws IOException {
+        String pageWidth = pdfNumber(source.getWidth() * KINDLE_POINTS_PER_PIXEL);
+        String pageHeight = pdfNumber(source.getHeight() * KINDLE_POINTS_PER_PIXEL);
+        byte[] imageData = deflateRawGrayscale(source);
+        byte[] contentStream = ("q\n"
+                + pageWidth + " 0 0 " + pageHeight + " 0 0 cm\n"
+                + "/Im0 Do\n"
+                + "Q\n").getBytes(StandardCharsets.US_ASCII);
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        List<Integer> offsets = new ArrayList<>();
+        writeAscii(output, "%PDF-1.4\n");
+
+        startPdfObject(output, offsets, 1);
+        writeAscii(output, "<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+        startPdfObject(output, offsets, 2);
+        writeAscii(output, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+
+        startPdfObject(output, offsets, 3);
+        writeAscii(output, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "
+                + pageWidth + " " + pageHeight
+                + "] /Resources << /ProcSet [/PDF /ImageB] /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n");
+
+        startPdfObject(output, offsets, 4);
+        writeAscii(output, "<< /Type /XObject /Subtype /Image /Width " + source.getWidth()
+                + " /Height " + source.getHeight()
+                + " /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length "
+                + imageData.length + " >>\nstream\n");
+        output.write(imageData);
+        writeAscii(output, "\nendstream\nendobj\n");
+
+        startPdfObject(output, offsets, 5);
+        writeAscii(output, "<< /Length " + contentStream.length + " >>\nstream\n");
+        output.write(contentStream);
+        writeAscii(output, "endstream\nendobj\n");
+
+        int xrefOffset = output.size();
+        writeAscii(output, "xref\n0 6\n0000000000 65535 f \n");
+        for (int offset : offsets) {
+            writeAscii(output, String.format(Locale.ROOT, "%010d 00000 n \n", offset));
+        }
+        writeAscii(output, "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n" + xrefOffset + "\n%%EOF\n");
+        return output.toByteArray();
+    }
+
+    private byte[] deflateRawGrayscale(BufferedImage source) throws IOException {
+        ByteArrayOutputStream rawImage = new ByteArrayOutputStream(source.getWidth() * source.getHeight());
+        for (int y = 0; y < source.getHeight(); y += 1) {
+            for (int x = 0; x < source.getWidth(); x += 1) {
+                rawImage.write(grayscale(source.getRGB(x, y)));
+            }
+        }
+
+        ByteArrayOutputStream compressedImage = new ByteArrayOutputStream();
+        try (DeflaterOutputStream deflater = new DeflaterOutputStream(compressedImage)) {
+            rawImage.writeTo(deflater);
+        }
+        return compressedImage.toByteArray();
+    }
+
+    private void startPdfObject(ByteArrayOutputStream output, List<Integer> offsets, int id) throws IOException {
+        offsets.add(output.size());
+        writeAscii(output, id + " 0 obj\n");
+    }
+
+    private void writeAscii(ByteArrayOutputStream output, String value) throws IOException {
+        output.write(value.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private String pdfNumber(double value) {
+        return String.format(Locale.ROOT, "%.2f", value);
     }
 
     private void writePngChunk(DataOutputStream output, String type, byte[] payload) throws IOException {

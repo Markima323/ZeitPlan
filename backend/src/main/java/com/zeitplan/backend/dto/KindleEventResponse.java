@@ -8,6 +8,7 @@ public record KindleEventResponse(
         String type,
         int version,
         @JsonProperty("image_url") String imageUrl,
+        @JsonProperty("document_url") String documentUrl,
         int width,
         int height,
         @JsonProperty("created_at") OffsetDateTime createdAt

@@ -197,6 +197,48 @@ public class KindlePushService {
                 .body(screen.getImageBytes());
     }
 
+    public ResponseEntity<byte[]> getScreenDocument(
+            String screenId,
+            String deviceId,
+            int version,
+            int width,
+            int height,
+            long expires,
+            String signature
+    ) {
+        if (OffsetDateTime.now(clock.withZone(ZoneOffset.UTC)).toEpochSecond() > expires) {
+            throw new ApiException(HttpStatus.GONE, "Kindle document link expired");
+        }
+
+        String expectedSignature = signImageUrl(screenId, deviceId, version, width, height, expires);
+        if (!MessageDigest.isEqual(
+                expectedSignature.getBytes(StandardCharsets.UTF_8),
+                (signature == null ? "" : signature).getBytes(StandardCharsets.UTF_8)
+        )) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Kindle document signature is invalid");
+        }
+
+        KindleScreenEntity screen = kindleScreenRepository.findById(screenId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Kindle document not found"));
+
+        if (
+                !screen.getDeviceId().equals(deviceId) ||
+                screen.getVersion() != version ||
+                screen.getImageWidth() != width ||
+                screen.getImageHeight() != height
+        ) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Kindle document parameters are invalid");
+        }
+
+        byte[] pdfBytes = kindleScreenRenderer.wrapPngAsPdf(screen.getImageBytes());
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"zeitplan-today.pdf\"")
+                .body(pdfBytes);
+    }
+
     public KindleRepushResponse pullCurrentScreen(
             String accessToken,
             KindleTelemetry telemetry,
@@ -362,10 +404,12 @@ public class KindlePushService {
 
         long expires = OffsetDateTime.now(clock.withZone(ZoneOffset.UTC)).plusSeconds(IMAGE_URL_TTL_SECONDS).toEpochSecond();
         String imageUrl = buildImageUrl(baseUrl, screen, expires);
+        String documentUrl = buildDocumentUrl(baseUrl, screen, expires);
         return ResponseEntity.ok(new KindleEventResponse(
                 "screen.update",
                 device.getCurrentVersion(),
                 imageUrl,
+                documentUrl,
                 screen.getImageWidth(),
                 screen.getImageHeight(),
                 screen.getRenderedAt()
@@ -378,6 +422,20 @@ public class KindlePushService {
         String signature = signImageUrl(screen.getId(), screen.getDeviceId(), screen.getVersion(), width, height, expires);
         return baseUrl
                 + "/api/kindle/screens/" + encode(screen.getId()) + ".png"
+                + "?device=" + encode(screen.getDeviceId())
+                + "&v=" + screen.getVersion()
+                + "&w=" + width
+                + "&h=" + height
+                + "&expires=" + expires
+                + "&sig=" + encode(signature);
+    }
+
+    private String buildDocumentUrl(String baseUrl, KindleScreenEntity screen, long expires) {
+        int width = screen.getImageWidth();
+        int height = screen.getImageHeight();
+        String signature = signImageUrl(screen.getId(), screen.getDeviceId(), screen.getVersion(), width, height, expires);
+        return baseUrl
+                + "/api/kindle/screens/" + encode(screen.getId()) + ".pdf"
                 + "?device=" + encode(screen.getDeviceId())
                 + "&v=" + screen.getVersion()
                 + "&w=" + width

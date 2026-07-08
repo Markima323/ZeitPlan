@@ -2217,6 +2217,10 @@ body {
   gap: 16px;
 }
 
+.kindle-admin-panel {
+  order: -1;
+}
+
 .kindle-create-form {
   display: flex;
   align-items: end;
