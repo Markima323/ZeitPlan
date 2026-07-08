@@ -46,7 +46,7 @@ find_touch_device() {
     }
     /B: ABS=/ { has_abs = 1 }
     /^$/ {
-      if (event != "" && name ~ /touch|cyttsp|elan|zforce|finger|multitouch|mx|max|fts/) {
+      if (event != "" && name ~ /touch|goodix|cyttsp|elan|zforce|finger|multitouch|mx|max|fts/) {
         print event
         exit
       }
@@ -55,6 +55,13 @@ find_touch_device() {
       }
     }
     END {
+      if (event != "" && name ~ /touch|goodix|cyttsp|elan|zforce|finger|multitouch|mx|max|fts/) {
+        print event
+        exit
+      }
+      if (fallback == "" && event != "" && has_abs == 1) {
+        fallback = event
+      }
       if (fallback != "") {
         print fallback
       }

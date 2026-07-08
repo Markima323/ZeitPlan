@@ -71,6 +71,7 @@ async function request<T>(
         "Content-Type": "application/json",
         ...(init?.headers ?? {}),
       },
+      cache: init?.cache ?? "no-store",
       credentials: "include",
       ...init,
       signal: controller?.signal ?? init?.signal,

@@ -73,8 +73,9 @@ export function TodayPlanPage({
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: number | null = null;
 
-    async function loadKindleDevices() {
+    async function loadKindleDevices(attempt = 1) {
       setIsKindleLoading(true);
       try {
         const nextKindleDevices = await apiClient.getKindleDevices();
@@ -84,11 +85,19 @@ export function TodayPlanPage({
         }
       } catch {
         if (!cancelled) {
+          if (attempt < 4) {
+            retryTimer = window.setTimeout(() => {
+              retryTimer = null;
+              void loadKindleDevices(attempt + 1);
+            }, attempt * 1200);
+            return;
+          }
+
           setKindleDevices([]);
           setKindleLoadFailed(true);
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && retryTimer === null) {
           setIsKindleLoading(false);
         }
       }
@@ -98,6 +107,9 @@ export function TodayPlanPage({
 
     return () => {
       cancelled = true;
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
     };
   }, []);
 
@@ -161,7 +173,11 @@ export function TodayPlanPage({
     }
 
     if (kindleDevices.length === 0) {
-      return null;
+      return {
+        online: false,
+        lastPushedAt: "尚未配置",
+        currentTitle: "还没有 Kindle 设备",
+      };
     }
 
     const latestPushedDevice = [...kindleDevices]

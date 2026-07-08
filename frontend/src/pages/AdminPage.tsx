@@ -78,8 +78,9 @@ export function AdminPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: number | null = null;
 
-    async function bootstrapKindleDevices() {
+    async function bootstrapKindleDevices(attempt = 1) {
       setIsKindleLoading(true);
       try {
         const nextKindleDevices = await apiClient.getKindleDevices();
@@ -89,10 +90,18 @@ export function AdminPage() {
         }
       } catch (error) {
         if (!cancelled) {
+          if (attempt < 4) {
+            retryTimer = window.setTimeout(() => {
+              retryTimer = null;
+              void bootstrapKindleDevices(attempt + 1);
+            }, attempt * 1200);
+            return;
+          }
+
           setKindleFeedback(error instanceof Error ? error.message : "读取 Kindle 设备失败");
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && retryTimer === null) {
           setIsKindleLoading(false);
         }
       }
@@ -102,6 +111,9 @@ export function AdminPage() {
 
     return () => {
       cancelled = true;
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
     };
   }, []);
 
