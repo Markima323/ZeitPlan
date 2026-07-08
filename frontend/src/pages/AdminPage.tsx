@@ -153,7 +153,7 @@ export function AdminPage() {
         ),
       );
       await refreshKindleDevices({ showFeedbackOnError: false });
-      setKindleFeedback(`已重新生成 Kindle 画面，当前版本 ${response.version}。`);
+      setKindleFeedback("已重新生成 Kindle 画面。");
     } catch (error) {
       setKindleFeedback(error instanceof Error ? error.message : "重新推送失败");
     } finally {
@@ -243,7 +243,7 @@ export function AdminPage() {
                 <span className={isRecentlySeen(device) ? "kindle-status-dot online" : "kindle-status-dot"} />
                 <div>
                   <strong>{device.name}</strong>
-                  <p>{isRecentlySeen(device) ? "长轮询在线" : "未连接或已离线"} · 版本 {device.currentVersion}</p>
+                  <p>{isRecentlySeen(device) ? "长轮询在线" : "未连接或已离线"}</p>
                 </div>
               </div>
 

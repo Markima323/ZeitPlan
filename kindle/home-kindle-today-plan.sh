@@ -1,8 +1,9 @@
 #!/bin/sh
 set -u
 
-WIDTH="${WIDTH:-1072}"
-HEIGHT="${HEIGHT:-1448}"
+WIDTH="${WIDTH:-600}"
+HEIGHT="${HEIGHT:-800}"
+AUTO_DETECT_SCREEN_SIZE="${AUTO_DETECT_SCREEN_SIZE:-1}"
 STATE_DIR="${STATE_DIR:-/mnt/us/home-kindle-today-plan/state}"
 SCREEN_PATH="${SCREEN_PATH:-/mnt/us/home-kindle-today-plan/current.png}"
 CONFIG_FILE="${CONFIG_FILE:-/mnt/us/home-kindle-today-plan/config.sh}"
@@ -26,6 +27,41 @@ log() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
 }
 
+apply_screen_size() {
+  set -- $(printf '%s\n' "$1" | sed 's/[^0-9]/ /g')
+  if [ "${1:-0}" -ge 300 ] 2>/dev/null && [ "${2:-0}" -ge 300 ] 2>/dev/null; then
+    WIDTH="$1"
+    HEIGHT="$2"
+    return 0
+  fi
+
+  return 1
+}
+
+detect_screen_size() {
+  for size_file in \
+    /sys/class/graphics/fb0/virtual_size \
+    /sys/class/graphics/fb0/modes \
+    /proc/eink_fb/virtual_fb_size
+  do
+    if [ -f "$size_file" ] && apply_screen_size "$(head -n 1 "$size_file" 2>/dev/null)"; then
+      log "Detected screen size from $size_file width=$WIDTH height=$HEIGHT"
+      return 0
+    fi
+  done
+
+  if command -v fbset >/dev/null 2>&1; then
+    FB_GEOMETRY="$(fbset -s 2>/dev/null | sed -n 's/.*geometry[[:space:]]*//p' | head -n 1)"
+    if apply_screen_size "$FB_GEOMETRY"; then
+      log "Detected screen size from fbset width=$WIDTH height=$HEIGHT"
+      return 0
+    fi
+  fi
+
+  log "Unable to auto-detect screen size. using configured width=$WIDTH height=$HEIGHT"
+  return 1
+}
+
 if [ "$BASE_URL" = "https://zeitplan.example.com" ] || [ -z "$BASE_URL" ]; then
   log "BASE_URL is not configured. Edit $CONFIG_FILE."
   exit 1
@@ -34,6 +70,10 @@ fi
 if [ "$API_KEY" = "replace-with-device-token" ] || [ -z "$API_KEY" ]; then
   log "API_KEY is not configured. Edit $CONFIG_FILE."
   exit 1
+fi
+
+if [ "$AUTO_DETECT_SCREEN_SIZE" != "0" ]; then
+  detect_screen_size || true
 fi
 
 VERSION="0"

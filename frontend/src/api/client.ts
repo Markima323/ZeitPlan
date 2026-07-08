@@ -24,6 +24,35 @@ class ApiError extends Error {
   }
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function shouldRetryRequest(error: unknown) {
+  return !(error instanceof ApiError) || error.status === 0 || error.status >= 500;
+}
+
+async function retryRequest<T>(operation: () => Promise<T>, attempts = 3, delayMs = 700): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts || !shouldRetryRequest(error)) {
+        break;
+      }
+
+      await wait(delayMs * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit,
@@ -165,7 +194,11 @@ export const apiClient = {
     return request<AdminOverviewResponse>(`/admin/overview?from=${fromDate}&to=${toDate}`);
   },
   getKindleDevices() {
-    return request<KindleDevicesResponse>("/kindle/devices", undefined, { timeoutMs: 6000 });
+    return retryRequest(
+      () => request<KindleDevicesResponse>("/kindle/devices", undefined, { timeoutMs: 8000 }),
+      3,
+      600,
+    );
   },
   createKindleDevice(name: string) {
     return request<KindleCreateDeviceResponse>("/kindle/devices", {

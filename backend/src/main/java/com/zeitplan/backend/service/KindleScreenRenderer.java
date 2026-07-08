@@ -82,6 +82,7 @@ public class KindleScreenRenderer {
             drawLine(graphics, margin, footerY - Math.max(28, height / 55), width - margin);
             graphics.setColor(new Color(80, 80, 80));
             drawText(graphics, "\u6700\u8fd1\u66f4\u65b0\uff1a" + snapshot.generatedAt().format(DateTimeFormatter.ofPattern("HH:mm")), margin, footerY, footerFont, contentWidth);
+            drawUpdateHint(graphics, width, height, margin, footerFont);
 
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             ImageIO.write(image, "png", output);
@@ -197,5 +198,25 @@ public class KindleScreenRenderer {
         graphics.setStroke(new BasicStroke(2f));
         graphics.drawLine(x1, y, x2, y);
         graphics.setColor(Color.BLACK);
+    }
+
+    private void drawUpdateHint(Graphics2D graphics, int width, int height, int margin, Font font) {
+        graphics.setFont(font);
+        FontMetrics metrics = graphics.getFontMetrics();
+        String label = "\u66f4\u65b0";
+        int paddingX = Math.max(14, width / 45);
+        int paddingY = Math.max(8, height / 120);
+        int buttonWidth = metrics.stringWidth(label) + (paddingX * 2);
+        int buttonHeight = metrics.getHeight() + (paddingY * 2);
+        int x = width - margin - buttonWidth;
+        int y = height - margin - buttonHeight;
+
+        graphics.setColor(Color.WHITE);
+        graphics.fillRoundRect(x, y, buttonWidth, buttonHeight, 16, 16);
+        graphics.setColor(new Color(90, 90, 90));
+        graphics.setStroke(new BasicStroke(2f));
+        graphics.drawRoundRect(x, y, buttonWidth, buttonHeight, 16, 16);
+        graphics.setColor(Color.BLACK);
+        graphics.drawString(label, x + paddingX, y + paddingY + metrics.getAscent());
     }
 }

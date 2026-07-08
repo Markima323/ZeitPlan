@@ -56,6 +56,33 @@ public class KindleController {
         );
     }
 
+    @PostMapping("/api/kindle/pull")
+    public KindleRepushResponse pullCurrentScreen(
+            @RequestHeader(name = "access-token", required = false) String accessToken,
+            @RequestHeader(name = "width", required = false) Integer width,
+            @RequestHeader(name = "height", required = false) Integer height,
+            @RequestHeader(name = "battery-percentage", required = false) Integer batteryPercentage,
+            @RequestHeader(name = "rssi", required = false) String rssi,
+            @RequestHeader(name = "id", required = false) String deviceIdentifier,
+            @RequestHeader(name = "model", required = false) String model,
+            @RequestHeader(name = "fw-version", required = false) String fwVersion,
+            HttpServletRequest request
+    ) {
+        return kindlePushService.pullCurrentScreen(
+                accessToken,
+                new KindlePushService.KindleTelemetry(
+                        width,
+                        height,
+                        batteryPercentage,
+                        rssi,
+                        deviceIdentifier,
+                        model,
+                        fwVersion
+                ),
+                request
+        );
+    }
+
     @GetMapping({"/kindle/screens/{screenId}.png", "/api/kindle/screens/{screenId}.png"})
     public ResponseEntity<byte[]> getScreenImage(
             @PathVariable String screenId,

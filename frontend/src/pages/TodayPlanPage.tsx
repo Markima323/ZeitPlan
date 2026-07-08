@@ -34,6 +34,8 @@ export function TodayPlanPage({
   const [plan, setPlan] = useState<DailyPlanResponse | null>(null);
   const [taskTypes, setTaskTypes] = useState<TaskTypeResponse[]>([]);
   const [kindleDevices, setKindleDevices] = useState<KindleDevice[]>([]);
+  const [isKindleLoading, setIsKindleLoading] = useState(true);
+  const [kindleLoadFailed, setKindleLoadFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -73,14 +75,21 @@ export function TodayPlanPage({
     let cancelled = false;
 
     async function loadKindleDevices() {
+      setIsKindleLoading(true);
       try {
         const nextKindleDevices = await apiClient.getKindleDevices();
         if (!cancelled) {
           setKindleDevices(nextKindleDevices.devices);
+          setKindleLoadFailed(false);
         }
       } catch {
         if (!cancelled) {
           setKindleDevices([]);
+          setKindleLoadFailed(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsKindleLoading(false);
         }
       }
     }
@@ -135,6 +144,22 @@ export function TodayPlanPage({
   );
 
   const kindleStatus = useMemo(() => {
+    if (isKindleLoading) {
+      return {
+        online: false,
+        lastPushedAt: "检查中",
+        currentTitle: "正在连接 Kindle",
+      };
+    }
+
+    if (kindleLoadFailed) {
+      return {
+        online: false,
+        lastPushedAt: "稍后自动重试",
+        currentTitle: "Kindle 状态暂时不可用",
+      };
+    }
+
     if (kindleDevices.length === 0) {
       return null;
     }
@@ -149,7 +174,7 @@ export function TodayPlanPage({
       lastPushedAt: formatKindleTime(latestPushedDevice?.lastPushedAt ?? null),
       currentTitle: latestPushedDevice?.currentScreenTitle ?? kindleDevices[0]?.currentScreenTitle ?? "暂无画面",
     };
-  }, [kindleDevices]);
+  }, [isKindleLoading, kindleDevices, kindleLoadFailed]);
 
   const focusBlockId = spotlight && spotlight.mode !== "done" ? spotlight.block.id : null;
 

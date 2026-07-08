@@ -197,6 +197,26 @@ public class KindlePushService {
                 .body(screen.getImageBytes());
     }
 
+    public KindleRepushResponse pullCurrentScreen(
+            String accessToken,
+            KindleTelemetry telemetry,
+            HttpServletRequest request
+    ) {
+        KindleDeviceEntity device = authenticateDevice(accessToken)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Kindle 设备认证失败"));
+
+        if (!device.isEnabled()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Kindle 设备已禁用");
+        }
+
+        updateTelemetry(device, telemetry, request);
+        KindleDeviceEntity savedDevice = kindleDeviceRepository.save(device);
+        KindleTodaySnapshot snapshot = kindleTodaySnapshotService.getCurrentSnapshot();
+        int version = renderAndPublish(savedDevice, snapshot, "device_pull");
+        lastSnapshotFingerprintByOwner.put(OWNER_USER_ID, snapshot.fingerprint());
+        return new KindleRepushResponse(true, version, "queued");
+    }
+
     public KindleRepushResponse repushTodayPlan(String deviceId) {
         KindleDeviceEntity device = kindleDeviceRepository.findById(deviceId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Kindle 设备不存在"));

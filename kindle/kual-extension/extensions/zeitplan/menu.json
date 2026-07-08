@@ -17,9 +17,17 @@
       "date": true
     },
     {
+      "name": "ZeitPlan: Update now",
+      "action": "sh ./bin/refresh.sh",
+      "priority": -8,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
       "name": "ZeitPlan: Export log to documents",
       "action": "sh ./bin/export-log.sh",
-      "priority": -8,
+      "priority": -7,
       "exitmenu": false,
       "status": false,
       "date": true
