@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "name": "ZeitPlan: Start screen sync",
+      "action": "sh ./bin/start.sh",
+      "priority": -10,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
+      "name": "ZeitPlan: Stop screen sync",
+      "action": "sh ./bin/stop.sh",
+      "priority": -9,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    },
+    {
+      "name": "ZeitPlan: Export log to documents",
+      "action": "sh ./bin/export-log.sh",
+      "priority": -8,
+      "exitmenu": false,
+      "status": false,
+      "date": true
+    }
+  ]
+}
