@@ -10,12 +10,15 @@ import com.zeitplan.backend.entity.TaskTypeEntity;
 import com.zeitplan.backend.repository.DailyPlanRepository;
 import com.zeitplan.backend.repository.TaskTypeRepository;
 import com.zeitplan.backend.service.mapper.PlanMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -29,10 +32,16 @@ public class DailyPlanService {
 
     private final DailyPlanRepository dailyPlanRepository;
     private final TaskTypeRepository taskTypeRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public DailyPlanService(DailyPlanRepository dailyPlanRepository, TaskTypeRepository taskTypeRepository) {
+    public DailyPlanService(
+            DailyPlanRepository dailyPlanRepository,
+            TaskTypeRepository taskTypeRepository,
+            ApplicationEventPublisher eventPublisher
+    ) {
         this.dailyPlanRepository = dailyPlanRepository;
         this.taskTypeRepository = taskTypeRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -91,7 +100,9 @@ public class DailyPlanService {
         }
 
         DailyPlanEntity saved = dailyPlanRepository.save(entity);
-        return PlanMapper.toResponse(saved);
+        DailyPlanResponse response = PlanMapper.toResponse(saved);
+        eventPublisher.publishEvent(new TodayPlanChangedEvent(pathDate, "item_updated", OffsetDateTime.now(ZoneOffset.UTC)));
+        return response;
     }
 
     private TaskTypeEntity resolveTaskType(Long taskTypeId) {

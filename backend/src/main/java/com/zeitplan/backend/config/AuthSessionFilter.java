@@ -27,9 +27,13 @@ public class AuthSessionFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return !"OPTIONS".equalsIgnoreCase(request.getMethod())
-                && (!path.startsWith("/api/") || path.startsWith("/api/auth/"))
-                || "OPTIONS".equalsIgnoreCase(request.getMethod());
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
+        return !path.startsWith("/api/")
+                || path.startsWith("/api/auth/")
+                || path.equals("/api/kindle/events");
     }
 
     @Override

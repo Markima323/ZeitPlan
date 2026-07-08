@@ -5,6 +5,9 @@ import type {
   DailyPlanResponse,
   DicePhase,
   DiceRollResponse,
+  KindleCreateDeviceResponse,
+  KindleDevicesResponse,
+  KindleRepushResponse,
   TaskTypePayload,
   TaskTypeResponse,
 } from "./types";
@@ -128,6 +131,20 @@ export const apiClient = {
   },
   getAdminOverview(fromDate: string, toDate: string) {
     return request<AdminOverviewResponse>(`/admin/overview?from=${fromDate}&to=${toDate}`);
+  },
+  getKindleDevices() {
+    return request<KindleDevicesResponse>("/kindle/devices");
+  },
+  createKindleDevice(name: string) {
+    return request<KindleCreateDeviceResponse>("/kindle/devices", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+  },
+  repushKindleTodayPlan(deviceId: string) {
+    return request<KindleRepushResponse>(`/kindle/devices/${deviceId}/repush-today-plan`, {
+      method: "POST",
+    });
   },
   getDiceHistory(date: string) {
     return request<DiceRollResponse[]>(`/plans/${date}/dice-rolls`);

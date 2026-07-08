@@ -21,7 +21,10 @@ services:
       SPRING_DATASOURCE_USERNAME: zeitplan
       SPRING_DATASOURCE_PASSWORD: zeitplan
       APP_CORS_ALLOWED_ORIGINS: http://localhost:5175,http://127.0.0.1:5175
+      APP_PUBLIC_BASE_URL: http://localhost:8282
       APP_DICE_TEST_MODE: "true"
+      APP_KINDLE_SIGNING_SECRET: zeitplan-dev-kindle-secret
+      APP_KINDLE_ZONE: Europe/Berlin
       SERVER_PORT: "8282"
     ports:
       - "8282:8282"

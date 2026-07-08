@@ -68,6 +68,37 @@ export interface AdminOverviewResponse {
   typeStats: TaskTypeStat[];
 }
 
+export interface KindleDevice {
+  id: string;
+  name: string;
+  lastSeenAt: string | null;
+  lastWidth: number | null;
+  lastHeight: number | null;
+  lastBatteryPercentage: number | null;
+  lastRssi: string | null;
+  currentVersion: number;
+  currentScreenTitle: string | null;
+  lastRenderStatus: string | null;
+  lastErrorMessage: string | null;
+  lastPushedAt: string | null;
+  enabled: boolean;
+}
+
+export interface KindleDevicesResponse {
+  devices: KindleDevice[];
+}
+
+export interface KindleCreateDeviceResponse {
+  device: KindleDevice;
+  deviceToken: string;
+}
+
+export interface KindleRepushResponse {
+  ok: boolean;
+  version: number;
+  status: string;
+}
+
 export interface AuthSessionResponse {
   authenticated: boolean;
   expiresAt: string;

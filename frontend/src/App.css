@@ -1944,6 +1944,26 @@ body {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.today-kindle-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--muted);
+}
+
+.today-kindle-status p {
+  margin: 2px 0 0;
+}
+
+.today-kindle-status strong {
+  color: var(--text);
+}
+
 .today-spotlight-card {
   display: grid;
   align-content: start;
@@ -2189,6 +2209,103 @@ body {
 
 .admin-filter-row {
   align-items: end;
+}
+
+.kindle-admin-panel,
+.kindle-device-list {
+  display: grid;
+  gap: 16px;
+}
+
+.kindle-create-form {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+
+.kindle-token-box {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px dashed rgba(154, 81, 9, 0.28);
+  border-radius: 18px;
+  background: rgba(255, 244, 229, 0.72);
+}
+
+.kindle-token-box code {
+  display: block;
+  padding: 12px;
+  overflow-wrap: anywhere;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.kindle-token-box p {
+  margin: 0;
+}
+
+.kindle-device-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(117, 87, 54, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.kindle-device-main,
+.kindle-device-meta,
+.kindle-current-screen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kindle-device-main p,
+.kindle-current-screen p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.kindle-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(108, 92, 75, 0.35);
+  box-shadow: 0 0 0 6px rgba(108, 92, 75, 0.08);
+  flex-shrink: 0;
+}
+
+.kindle-status-dot.online {
+  background: #4d8f5f;
+  box-shadow: 0 0 0 6px rgba(77, 143, 95, 0.12);
+}
+
+.kindle-device-meta {
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+
+.kindle-device-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kindle-current-screen {
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(248, 240, 231, 0.76);
+}
+
+.kindle-current-screen span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .admin-summary-pill,
@@ -2699,6 +2816,13 @@ body {
   .keyword-modal-backdrop {
     align-items: end;
     padding: 12px;
+  }
+
+  .kindle-create-form,
+  .kindle-current-screen {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .keyword-modal {

@@ -1,9 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiClient } from "../api/client";
-import type { DailyPlanResponse, SeasonMode, TaskTypeResponse } from "../api/types";
+import type { DailyPlanResponse, KindleDevice, SeasonMode, TaskTypeResponse } from "../api/types";
 import { buildScheduleBlocks, formatMinutes, parseClock, todayIsoDate } from "../lib/schedule";
 import { TaskIcon } from "../lib/taskIcons";
+
+function formatKindleTime(value: string | null) {
+  if (!value) {
+    return "暂无推送";
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function hasOnlineKindle(devices: KindleDevice[]) {
+  return devices.some((device) => (
+    device.lastSeenAt &&
+    Date.now() - new Date(device.lastSeenAt).getTime() < 2 * 60 * 1000
+  ));
+}
 
 export function TodayPlanPage({
   seasonMode,
@@ -15,6 +33,7 @@ export function TodayPlanPage({
   const [planDate] = useState(todayIsoDate());
   const [plan, setPlan] = useState<DailyPlanResponse | null>(null);
   const [taskTypes, setTaskTypes] = useState<TaskTypeResponse[]>([]);
+  const [kindleDevices, setKindleDevices] = useState<KindleDevice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -23,14 +42,16 @@ export function TodayPlanPage({
 
     async function loadTodayPlan() {
       try {
-        const [nextPlan, nextTaskTypes] = await Promise.all([
+        const [nextPlan, nextTaskTypes, nextKindleDevices] = await Promise.all([
           apiClient.getPlan(planDate),
           apiClient.getTaskTypes(),
+          apiClient.getKindleDevices().catch(() => ({ devices: [] })),
         ]);
 
         if (!cancelled) {
           setPlan(nextPlan);
           setTaskTypes(nextTaskTypes);
+          setKindleDevices(nextKindleDevices.devices);
           setFeedback(null);
           setIsLoading(false);
           onSeasonSync(nextPlan.seasonMode);
@@ -92,6 +113,23 @@ export function TodayPlanPage({
     [plan?.tasks.length, schedule.focusMinutes],
   );
 
+  const kindleStatus = useMemo(() => {
+    if (kindleDevices.length === 0) {
+      return null;
+    }
+
+    const latestPushedDevice = [...kindleDevices]
+      .filter((device) => device.lastPushedAt)
+      .sort((left, right) => new Date(right.lastPushedAt ?? 0).getTime() - new Date(left.lastPushedAt ?? 0).getTime())
+      .at(0);
+
+    return {
+      online: hasOnlineKindle(kindleDevices),
+      lastPushedAt: formatKindleTime(latestPushedDevice?.lastPushedAt ?? null),
+      currentTitle: latestPushedDevice?.currentScreenTitle ?? kindleDevices[0]?.currentScreenTitle ?? "暂无画面",
+    };
+  }, [kindleDevices]);
+
   const focusBlockId = spotlight && spotlight.mode !== "done" ? spotlight.block.id : null;
 
   return (
@@ -109,6 +147,16 @@ export function TodayPlanPage({
           </div>
 
           <p className="today-summary-line">{summaryLine}</p>
+
+          {kindleStatus ? (
+            <div className="today-kindle-status">
+              <span className={kindleStatus.online ? "kindle-status-dot online" : "kindle-status-dot"} />
+              <div>
+                <strong>{kindleStatus.online ? "Kindle 已连接" : "Kindle 未连接"}</strong>
+                <p>最后推送 {kindleStatus.lastPushedAt} · 当前显示：{kindleStatus.currentTitle}</p>
+              </div>
+            </div>
+          ) : null}
 
           <div className="today-actions">
             <Link className="primary-button" to="/planner">
