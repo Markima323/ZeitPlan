@@ -36,7 +36,7 @@ public class KindleTodaySnapshotService {
     ) {
         this.dailyPlanRepository = dailyPlanRepository;
         this.clock = clock;
-        this.zoneId = ZoneId.of(zoneId);
+        this.zoneId = resolveZoneId(zoneId);
     }
 
     @Transactional(readOnly = true)
@@ -140,5 +140,13 @@ public class KindleTodaySnapshotService {
     private LocalTime toClock(int totalMinutes) {
         int normalized = Math.floorMod(totalMinutes, 1440);
         return LocalTime.of(normalized / 60, normalized % 60);
+    }
+
+    private ZoneId resolveZoneId(String value) {
+        if (value == null || value.isBlank()) {
+            return ZoneId.of("Europe/Berlin");
+        }
+
+        return ZoneId.of(value.trim());
     }
 }

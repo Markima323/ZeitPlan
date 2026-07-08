@@ -77,7 +77,8 @@ public class KindlePushService {
             KindleScreenRenderer kindleScreenRenderer,
             KindlePushChannelManager kindlePushChannelManager,
             Clock clock,
-            @Value("${app.kindle.signing-secret:${app.auth.cookie-secret}}") String signingSecret,
+            @Value("${app.kindle.signing-secret:}") String signingSecret,
+            @Value("${app.auth.cookie-secret}") String authCookieSecret,
             @Value("${app.kindle.zone:Europe/Berlin}") String zoneId,
             @Value("${app.public-base-url:}") String publicBaseUrl
     ) {
@@ -88,8 +89,8 @@ public class KindlePushService {
         this.kindleScreenRenderer = kindleScreenRenderer;
         this.kindlePushChannelManager = kindlePushChannelManager;
         this.clock = clock;
-        this.zoneId = ZoneId.of(zoneId);
-        this.signingSecret = signingSecret;
+        this.zoneId = resolveZoneId(zoneId);
+        this.signingSecret = signingSecret == null || signingSecret.isBlank() ? authCookieSecret : signingSecret;
         this.publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.trim();
     }
 
@@ -447,6 +448,14 @@ public class KindlePushService {
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private ZoneId resolveZoneId(String value) {
+        if (value == null || value.isBlank()) {
+            return ZoneId.of("Europe/Berlin");
+        }
+
+        return ZoneId.of(value.trim());
     }
 
     public record KindleTelemetry(

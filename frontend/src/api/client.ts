@@ -47,7 +47,20 @@ async function request<T>(
   }
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: { message?: string } | null = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const looksLikeHtml = text.trimStart().startsWith("<");
+      throw new ApiError(
+        response.status,
+        looksLikeHtml
+          ? "服务器返回了网页而不是 API 数据，可能是后端未启动或反向代理没有转到后端。"
+          : "服务器返回了无法解析的数据。",
+      );
+    }
+  }
 
   if (!response.ok) {
     throw new ApiError(response.status, data?.message ?? "请求失败");
