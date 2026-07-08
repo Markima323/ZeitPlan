@@ -10,6 +10,7 @@ LOG_FILE="${LOG_FILE:-$STATE_DIR/kindle.log}"
 VERSION_FILE="$STATE_DIR/version"
 EVENT_FILE="$STATE_DIR/event.json"
 HTTP_FILE="$STATE_DIR/http_code"
+IMAGE_HTTP_FILE="$STATE_DIR/image_http_code"
 
 mkdir -p "$STATE_DIR"
 
@@ -50,6 +51,18 @@ json_get_number() {
   sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p" "$EVENT_FILE" | head -n 1
 }
 
+file_header_hex() {
+  if command -v od >/dev/null 2>&1 && [ -f "$1" ]; then
+    od -An -tx1 -N8 "$1" 2>/dev/null | tr -d ' \n'
+  else
+    echo "unavailable"
+  fi
+}
+
+is_png_file() {
+  [ "$(file_header_hex "$1")" = "89504e470d0a1a0a" ]
+}
+
 backoff_seconds() {
   case "$1" in
     0|1) echo 2 ;;
@@ -63,7 +76,7 @@ ERROR_COUNT=0
 log "ZeitPlan Kindle client started. base_url=$BASE_URL width=$WIDTH height=$HEIGHT version=$VERSION"
 
 while true; do
-  rm -f "$EVENT_FILE" "$HTTP_FILE"
+  rm -f "$EVENT_FILE" "$HTTP_FILE" "$IMAGE_HTTP_FILE"
   curl \
     --silent \
     --show-error \
@@ -104,20 +117,48 @@ while true; do
 
   if [ "$TYPE" = "screen.update" ] && [ -n "$NEW_VERSION" ] && [ "$NEW_VERSION" != "$VERSION" ] && [ -n "$IMAGE_URL" ]; then
     log "Screen update received. version=$NEW_VERSION image_url=$IMAGE_URL"
-    if curl --silent --show-error --location --max-time 30 "$IMAGE_URL" -o "$SCREEN_PATH"; then
-      eips -c
-      if eips -g "$SCREEN_PATH" -x 0 -y 0; then
-        VERSION="$NEW_VERSION"
-        echo "$VERSION" > "$VERSION_FILE"
-        ERROR_COUNT=0
-        log "Screen rendered successfully. version=$VERSION path=$SCREEN_PATH"
-      else
-        log "Screen render failed. path=$SCREEN_PATH"
-        sleep "$(backoff_seconds "$ERROR_COUNT")"
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-      fi
+    curl \
+      --silent \
+      --show-error \
+      --location \
+      --max-time 30 \
+      --output "$SCREEN_PATH" \
+      --write-out "%{http_code}" \
+      "$IMAGE_URL" > "$IMAGE_HTTP_FILE"
+
+    IMAGE_CURL_EXIT="$?"
+    IMAGE_HTTP_CODE="$(cat "$IMAGE_HTTP_FILE" 2>/dev/null || echo 000)"
+    IMAGE_HEADER="$(file_header_hex "$SCREEN_PATH")"
+
+    if [ "$IMAGE_CURL_EXIT" != "0" ]; then
+      log "Screen image download failed. curl_exit=$IMAGE_CURL_EXIT http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER image_url=$IMAGE_URL"
+      sleep "$(backoff_seconds "$ERROR_COUNT")"
+      ERROR_COUNT=$((ERROR_COUNT + 1))
+      continue
+    fi
+
+    if [ "$IMAGE_HTTP_CODE" != "200" ]; then
+      log "Screen image returned unexpected status. http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER image_url=$IMAGE_URL"
+      sleep "$(backoff_seconds "$ERROR_COUNT")"
+      ERROR_COUNT=$((ERROR_COUNT + 1))
+      continue
+    fi
+
+    if ! is_png_file "$SCREEN_PATH"; then
+      log "Screen image is not PNG. http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER path=$SCREEN_PATH"
+      sleep "$(backoff_seconds "$ERROR_COUNT")"
+      ERROR_COUNT=$((ERROR_COUNT + 1))
+      continue
+    fi
+
+    eips -c
+    if eips -g "$SCREEN_PATH" -x 0 -y 0; then
+      VERSION="$NEW_VERSION"
+      echo "$VERSION" > "$VERSION_FILE"
+      ERROR_COUNT=0
+      log "Screen rendered successfully. version=$VERSION path=$SCREEN_PATH header=$IMAGE_HEADER"
     else
-      log "Screen image download failed. image_url=$IMAGE_URL"
+      log "Screen render failed. path=$SCREEN_PATH header=$IMAGE_HEADER"
       sleep "$(backoff_seconds "$ERROR_COUNT")"
       ERROR_COUNT=$((ERROR_COUNT + 1))
     fi

@@ -25,7 +25,9 @@ public class KindleScreenRenderer {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     public byte[] render(KindleTodaySnapshot snapshot, int width, int height) {
-        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+        // Some Kindle firmware builds reject Java's grayscale PNG output in eips.
+        // RGB keeps the image monochrome visually while using a broadly supported PNG type.
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D graphics = image.createGraphics();
         try {
             graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -39,14 +41,13 @@ public class KindleScreenRenderer {
 
             Font eyebrowFont = font(Font.BOLD, Math.max(22, width / 34));
             Font titleFont = font(Font.BOLD, Math.max(50, width / 16));
-            Font metaFont = font(Font.PLAIN, Math.max(24, width / 30));
             Font sectionFont = font(Font.BOLD, Math.max(30, width / 24));
             Font taskFont = font(Font.BOLD, Math.max(58, width / 14));
             Font detailFont = font(Font.PLAIN, Math.max(30, width / 26));
             Font footerFont = font(Font.PLAIN, Math.max(22, width / 34));
 
             graphics.setColor(Color.BLACK);
-            cursorY = drawText(graphics, "今日计划", margin, cursorY, eyebrowFont, contentWidth);
+            cursorY = drawText(graphics, "\u4eca\u65e5\u8ba1\u5212", margin, cursorY, eyebrowFont, contentWidth);
             cursorY += Math.max(16, height / 90);
             cursorY = drawText(graphics, snapshot.planDate().format(DATE_FORMATTER) + "  " + weekday(snapshot), margin, cursorY, titleFont, contentWidth);
             cursorY += Math.max(34, height / 36);
@@ -54,33 +55,33 @@ public class KindleScreenRenderer {
             cursorY += Math.max(52, height / 24);
 
             if (snapshot.hasCurrentItem()) {
-                cursorY = drawText(graphics, "当前进行中", margin, cursorY, sectionFont, contentWidth);
+                cursorY = drawText(graphics, "\u5f53\u524d\u8fdb\u884c\u4e2d", margin, cursorY, sectionFont, contentWidth);
                 cursorY += Math.max(30, height / 42);
                 cursorY = drawWrappedText(graphics, snapshot.title(), margin, cursorY, taskFont, contentWidth, 4, 1.12f);
                 cursorY += Math.max(46, height / 30);
-                cursorY = drawText(graphics, "开始时间：" + snapshot.startTime().format(TIME_FORMATTER), margin, cursorY, detailFont, contentWidth);
+                cursorY = drawText(graphics, "\u5f00\u59cb\u65f6\u95f4\uff1a" + snapshot.startTime().format(TIME_FORMATTER), margin, cursorY, detailFont, contentWidth);
                 cursorY += Math.max(18, height / 80);
-                cursorY = drawText(graphics, "预计结束：" + snapshot.endTime().format(TIME_FORMATTER), margin, cursorY, detailFont, contentWidth);
+                cursorY = drawText(graphics, "\u9884\u8ba1\u7ed3\u675f\uff1a" + snapshot.endTime().format(TIME_FORMATTER), margin, cursorY, detailFont, contentWidth);
 
                 if (snapshot.taskTypeName() != null && !snapshot.taskTypeName().isBlank()) {
                     cursorY += Math.max(18, height / 80);
-                    cursorY = drawText(graphics, "任务类型：" + snapshot.taskTypeName(), margin, cursorY, detailFont, contentWidth);
+                    cursorY = drawText(graphics, "\u4efb\u52a1\u7c7b\u578b\uff1a" + snapshot.taskTypeName(), margin, cursorY, detailFont, contentWidth);
                 }
 
                 if (snapshot.nextTitle() != null && !snapshot.nextTitle().isBlank()) {
                     cursorY += Math.max(42, height / 34);
-                    cursorY = drawWrappedText(graphics, "下一项：" + snapshot.nextTitle(), margin, cursorY, detailFont, contentWidth, 2, 1.25f);
+                    cursorY = drawWrappedText(graphics, "\u4e0b\u4e00\u9879\uff1a" + snapshot.nextTitle(), margin, cursorY, detailFont, contentWidth, 2, 1.25f);
                 }
             } else {
-                cursorY = drawText(graphics, "暂无进行中的任务", margin, cursorY, titleFont, contentWidth);
+                cursorY = drawText(graphics, "\u6682\u65e0\u8fdb\u884c\u4e2d\u7684\u4efb\u52a1", margin, cursorY, titleFont, contentWidth);
                 cursorY += Math.max(34, height / 36);
-                drawWrappedText(graphics, "Kindle 会在当前事项开始或内容变化时自动刷新。", margin, cursorY, detailFont, contentWidth, 3, 1.25f);
+                drawWrappedText(graphics, "Kindle \u4f1a\u5728\u5f53\u524d\u4e8b\u9879\u5f00\u59cb\u6216\u5185\u5bb9\u53d8\u5316\u65f6\u81ea\u52a8\u5237\u65b0\u3002", margin, cursorY, detailFont, contentWidth, 3, 1.25f);
             }
 
             int footerY = height - margin - graphics.getFontMetrics(footerFont).getHeight();
             drawLine(graphics, margin, footerY - Math.max(28, height / 55), width - margin);
             graphics.setColor(new Color(80, 80, 80));
-            drawText(graphics, "最近更新：" + snapshot.generatedAt().format(DateTimeFormatter.ofPattern("HH:mm")), margin, footerY, footerFont, contentWidth);
+            drawText(graphics, "\u6700\u8fd1\u66f4\u65b0\uff1a" + snapshot.generatedAt().format(DateTimeFormatter.ofPattern("HH:mm")), margin, footerY, footerFont, contentWidth);
 
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             ImageIO.write(image, "png", output);
