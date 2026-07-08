@@ -45,12 +45,12 @@ public class KindleScreenRenderer {
             int contentWidth = width - (margin * 2);
             int cursorY = margin;
 
-            Font eyebrowFont = font(Font.BOLD, Math.max(22, width / 34));
-            Font titleFont = font(Font.BOLD, Math.max(50, width / 16));
-            Font sectionFont = font(Font.BOLD, Math.max(30, width / 24));
-            Font taskFont = font(Font.BOLD, Math.max(58, width / 14));
-            Font detailFont = font(Font.PLAIN, Math.max(30, width / 26));
-            Font footerFont = font(Font.PLAIN, Math.max(22, width / 34));
+            Font eyebrowFont = font(Font.BOLD, Math.max(30, width / 25));
+            Font titleFont = font(Font.BOLD, Math.max(68, width / 12));
+            Font sectionFont = font(Font.BOLD, Math.max(42, width / 18));
+            Font taskFont = font(Font.BOLD, Math.max(78, width / 10));
+            Font detailFont = font(Font.PLAIN, Math.max(42, width / 19));
+            Font footerFont = font(Font.PLAIN, Math.max(28, width / 27));
 
             graphics.setColor(Color.BLACK);
             cursorY = drawText(graphics, "\u4eca\u65e5\u8ba1\u5212", margin, cursorY, eyebrowFont, contentWidth);
@@ -253,7 +253,8 @@ public class KindleScreenRenderer {
         graphics.setFont(font);
         FontMetrics metrics = graphics.getFontMetrics();
         String safeText = ellipsize(graphics, text, maxWidth);
-        graphics.drawString(safeText, x, y + metrics.getAscent());
+        int centeredX = x + Math.max(0, (maxWidth - metrics.stringWidth(safeText)) / 2);
+        graphics.drawString(safeText, centeredX, y + metrics.getAscent());
         return y + metrics.getHeight();
     }
 
@@ -273,7 +274,8 @@ public class KindleScreenRenderer {
         int lineStep = Math.round(metrics.getHeight() * lineHeight);
         int cursorY = y;
         for (String line : lines) {
-            graphics.drawString(line, x, cursorY + metrics.getAscent());
+            int centeredX = x + Math.max(0, (maxWidth - metrics.stringWidth(line)) / 2);
+            graphics.drawString(line, centeredX, cursorY + metrics.getAscent());
             cursorY += lineStep;
         }
         return cursorY;
