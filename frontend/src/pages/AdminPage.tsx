@@ -48,6 +48,7 @@ export function AdminPage() {
   const [newKindleToken, setNewKindleToken] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [kindleFeedback, setKindleFeedback] = useState<string | null>(null);
+  const [isKindleLoading, setIsKindleLoading] = useState(true);
   const [isCreatingKindleDevice, setIsCreatingKindleDevice] = useState(false);
   const [repushingDeviceId, setRepushingDeviceId] = useState<string | null>(null);
 
@@ -56,13 +57,9 @@ export function AdminPage() {
 
     async function bootstrapOverview() {
       try {
-        const [nextOverview, nextKindleDevices] = await Promise.all([
-          apiClient.getAdminOverview(fromDate, toDate),
-          apiClient.getKindleDevices(),
-        ]);
+        const nextOverview = await apiClient.getAdminOverview(fromDate, toDate);
         if (!cancelled) {
           setOverview(nextOverview);
-          setKindleDevices(nextKindleDevices.devices);
           setFeedback(null);
         }
       } catch (error) {
@@ -79,9 +76,47 @@ export function AdminPage() {
     };
   }, [fromDate, toDate]);
 
-  async function refreshKindleDevices() {
-    const nextKindleDevices = await apiClient.getKindleDevices();
-    setKindleDevices(nextKindleDevices.devices);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function bootstrapKindleDevices() {
+      setIsKindleLoading(true);
+      try {
+        const nextKindleDevices = await apiClient.getKindleDevices();
+        if (!cancelled) {
+          setKindleDevices(nextKindleDevices.devices);
+          setKindleFeedback(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setKindleFeedback(error instanceof Error ? error.message : "读取 Kindle 设备失败");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsKindleLoading(false);
+        }
+      }
+    }
+
+    void bootstrapKindleDevices();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function refreshKindleDevices(options: { showFeedbackOnError?: boolean } = {}) {
+    setIsKindleLoading(true);
+    try {
+      const nextKindleDevices = await apiClient.getKindleDevices();
+      setKindleDevices(nextKindleDevices.devices);
+    } catch (error) {
+      if (options.showFeedbackOnError !== false) {
+        setKindleFeedback(error instanceof Error ? error.message : "刷新 Kindle 设备失败");
+      }
+    } finally {
+      setIsKindleLoading(false);
+    }
   }
 
   async function handleCreateKindleDevice(event: FormEvent<HTMLFormElement>) {
@@ -95,7 +130,8 @@ export function AdminPage() {
     try {
       const response = await apiClient.createKindleDevice(kindleDeviceName.trim());
       setNewKindleToken(response.deviceToken);
-      await refreshKindleDevices();
+      setKindleDevices((devices) => [...devices.filter((device) => device.id !== response.device.id), response.device]);
+      await refreshKindleDevices({ showFeedbackOnError: false });
       setKindleFeedback("Kindle 设备已创建。请立即保存下方 Token，它只显示这一次。");
     } catch (error) {
       setKindleFeedback(error instanceof Error ? error.message : "创建 Kindle 设备失败");
@@ -109,7 +145,14 @@ export function AdminPage() {
     setKindleFeedback(null);
     try {
       const response = await apiClient.repushKindleTodayPlan(deviceId);
-      await refreshKindleDevices();
+      setKindleDevices((devices) =>
+        devices.map((device) =>
+          device.id === deviceId
+            ? { ...device, currentVersion: response.version, lastPushedAt: new Date().toISOString() }
+            : device,
+        ),
+      );
+      await refreshKindleDevices({ showFeedbackOnError: false });
       setKindleFeedback(`已重新生成 Kindle 画面，当前版本 ${response.version}。`);
     } catch (error) {
       setKindleFeedback(error instanceof Error ? error.message : "重新推送失败");
@@ -237,7 +280,11 @@ export function AdminPage() {
             </article>
           ))}
 
-          {kindleDevices.length === 0 ? (
+          {isKindleLoading ? (
+            <div className="empty-state">正在检查 Kindle 设备连接...</div>
+          ) : null}
+
+          {!isKindleLoading && kindleDevices.length === 0 ? (
             <div className="empty-state">还没有 Kindle 设备。先创建设备，再把 Token 配进 KUAL 长轮询脚本。</div>
           ) : null}
         </div>

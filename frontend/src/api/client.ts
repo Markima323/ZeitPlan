@@ -27,16 +27,35 @@ class ApiError extends Error {
 async function request<T>(
   path: string,
   init?: RequestInit,
-  options?: { suppressAuthEvent?: boolean },
+  options?: { suppressAuthEvent?: boolean; timeoutMs?: number },
 ): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    credentials: "include",
-    ...init,
-  });
+  const timeoutMs = options?.timeoutMs;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+      credentials: "include",
+      ...init,
+      signal: controller?.signal ?? init?.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(0, "请求超时，请稍后再试。");
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
 
   if (response.status === 401 && !options?.suppressAuthEvent) {
     window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
@@ -146,18 +165,18 @@ export const apiClient = {
     return request<AdminOverviewResponse>(`/admin/overview?from=${fromDate}&to=${toDate}`);
   },
   getKindleDevices() {
-    return request<KindleDevicesResponse>("/kindle/devices");
+    return request<KindleDevicesResponse>("/kindle/devices", undefined, { timeoutMs: 6000 });
   },
   createKindleDevice(name: string) {
     return request<KindleCreateDeviceResponse>("/kindle/devices", {
       method: "POST",
       body: JSON.stringify({ name }),
-    });
+    }, { timeoutMs: 12000 });
   },
   repushKindleTodayPlan(deviceId: string) {
     return request<KindleRepushResponse>(`/kindle/devices/${deviceId}/repush-today-plan`, {
       method: "POST",
-    });
+    }, { timeoutMs: 15000 });
   },
   getDiceHistory(date: string) {
     return request<DiceRollResponse[]>(`/plans/${date}/dice-rolls`);

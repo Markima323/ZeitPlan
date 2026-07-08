@@ -42,16 +42,14 @@ export function TodayPlanPage({
 
     async function loadTodayPlan() {
       try {
-        const [nextPlan, nextTaskTypes, nextKindleDevices] = await Promise.all([
+        const [nextPlan, nextTaskTypes] = await Promise.all([
           apiClient.getPlan(planDate),
           apiClient.getTaskTypes(),
-          apiClient.getKindleDevices().catch(() => ({ devices: [] })),
         ]);
 
         if (!cancelled) {
           setPlan(nextPlan);
           setTaskTypes(nextTaskTypes);
-          setKindleDevices(nextKindleDevices.devices);
           setFeedback(null);
           setIsLoading(false);
           onSeasonSync(nextPlan.seasonMode);
@@ -70,6 +68,29 @@ export function TodayPlanPage({
       cancelled = true;
     };
   }, [onSeasonSync, planDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadKindleDevices() {
+      try {
+        const nextKindleDevices = await apiClient.getKindleDevices();
+        if (!cancelled) {
+          setKindleDevices(nextKindleDevices.devices);
+        }
+      } catch {
+        if (!cancelled) {
+          setKindleDevices([]);
+        }
+      }
+    }
+
+    void loadKindleDevices();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const schedule = useMemo(
     () =>
