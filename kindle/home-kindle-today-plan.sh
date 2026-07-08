@@ -5,6 +5,8 @@ WIDTH="${WIDTH:-600}"
 HEIGHT="${HEIGHT:-800}"
 AUTO_DETECT_SCREEN_SIZE="${AUTO_DETECT_SCREEN_SIZE:-1}"
 DISPLAY_MODE="${DISPLAY_MODE:-eips_plain}"
+STARTUP_PULL="${STARTUP_PULL:-0}"
+DISPLAY_CLEAR_DELAY="${DISPLAY_CLEAR_DELAY:-1}"
 STATE_DIR="${STATE_DIR:-/mnt/us/home-kindle-today-plan/state}"
 SCREEN_PATH="${SCREEN_PATH:-/mnt/us/home-kindle-today-plan/current.png}"
 CONFIG_FILE="${CONFIG_FILE:-/mnt/us/home-kindle-today-plan/config.sh}"
@@ -108,6 +110,16 @@ is_png_file() {
 }
 
 display_screen() {
+  if ! command -v eips >/dev/null 2>&1; then
+    log "Display failed. eips command not found."
+    return 1
+  fi
+
+  # KUAL often redraws the Kindle home after an action exits. Always clear before
+  # painting the PNG so home/menu fragments are less likely to remain behind it.
+  eips -c
+  sleep "$DISPLAY_CLEAR_DELAY"
+
   case "$DISPLAY_MODE" in
     fbink)
       if command -v fbink >/dev/null 2>&1; then
@@ -116,15 +128,12 @@ display_screen() {
         return "$?"
       fi
       log "fbink not found. falling back to eips_plain."
-      eips -c
       eips -g "$SCREEN_PATH"
       ;;
     eips_xy)
-      eips -c
       eips -g "$SCREEN_PATH" -x 0 -y 0
       ;;
     *)
-      eips -c
       eips -g "$SCREEN_PATH"
       ;;
   esac
@@ -165,7 +174,11 @@ backoff_seconds() {
 
 ERROR_COUNT=0
 log "ZeitPlan Kindle client started. base_url=$BASE_URL width=$WIDTH height=$HEIGHT version=$VERSION"
-request_pull
+if [ "$STARTUP_PULL" = "1" ]; then
+  request_pull
+else
+  log "Startup pull skipped. Use KUAL Update or the on-screen Update button to request a fresh image."
+fi
 
 while true; do
   if [ -f "$STOP_FILE" ]; then

@@ -3,7 +3,10 @@
 APP_DIR="/mnt/us/home-kindle-today-plan"
 STATE_DIR="$APP_DIR/state"
 SCRIPT="$APP_DIR/home-kindle-today-plan.sh"
+SCREEN_PATH="$APP_DIR/current.png"
+TOUCH_SCRIPT="/mnt/us/extensions/zeitplan/bin/touch-buttons.sh"
 PID_FILE="$STATE_DIR/zeitplan.pid"
+TOUCH_PID_FILE="$STATE_DIR/touch.pid"
 LOG_FILE="$STATE_DIR/kindle.log"
 STOP_FILE="$STATE_DIR/stop"
 
@@ -17,6 +20,26 @@ show_message() {
     if [ -n "${2:-}" ]; then
       eips 2 5 "$2"
     fi
+  fi
+}
+
+render_current_screen() {
+  if command -v eips >/dev/null 2>&1 && [ -f "$SCREEN_PATH" ]; then
+    eips -c
+    sleep 1
+    eips -g "$SCREEN_PATH"
+  fi
+}
+
+schedule_post_kual_redraw() {
+  if command -v eips >/dev/null 2>&1 && [ -f "$SCREEN_PATH" ]; then
+    (
+      sleep 2
+      render_current_screen
+      sleep 3
+      render_current_screen
+    ) >> "$LOG_FILE" 2>&1 &
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Scheduled post-KUAL redraw. pid=$!" >> "$LOG_FILE"
   fi
 }
 
@@ -42,9 +65,32 @@ ps 2>/dev/null | grep '[h]ome-kindle-today-plan.sh' | awk '{print $1}' | while r
   fi
 done
 
-rm -f "$PID_FILE" "$STOP_FILE"
+if [ -f "$TOUCH_PID_FILE" ]; then
+  TOUCH_PID="$(cat "$TOUCH_PID_FILE" 2>/dev/null || true)"
+  if [ -n "$TOUCH_PID" ] && kill -0 "$TOUCH_PID" 2>/dev/null; then
+    kill "$TOUCH_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Restart requested. stopping existing touch controls. pid=$TOUCH_PID" >> "$LOG_FILE"
+  fi
+fi
+
+ps 2>/dev/null | grep '[t]ouch-buttons.sh' | awk '{print $1}' | while read -r OLD_TOUCH_PID; do
+  if [ -n "$OLD_TOUCH_PID" ]; then
+    kill "$OLD_TOUCH_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped extra ZeitPlan touch controls. pid=$OLD_TOUCH_PID" >> "$LOG_FILE"
+  fi
+done
+
+rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$STOP_FILE"
 
 nohup sh "$SCRIPT" >> "$LOG_FILE" 2>&1 &
 echo "$!" > "$PID_FILE"
 echo "$(date '+%Y-%m-%d %H:%M:%S') Started ZeitPlan client. pid=$!" >> "$LOG_FILE"
-show_message "Restarted sync" "pid=$!"
+
+if [ -f "$TOUCH_SCRIPT" ]; then
+  nohup sh "$TOUCH_SCRIPT" >> "$LOG_FILE" 2>&1 &
+  echo "$!" > "$TOUCH_PID_FILE"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') Started ZeitPlan touch controls. pid=$!" >> "$LOG_FILE"
+fi
+
+render_current_screen || show_message "Restarted sync" "pid=$!"
+schedule_post_kual_redraw

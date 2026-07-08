@@ -2,6 +2,7 @@
 
 STATE_DIR="/mnt/us/home-kindle-today-plan/state"
 PID_FILE="$STATE_DIR/zeitplan.pid"
+TOUCH_PID_FILE="$STATE_DIR/touch.pid"
 LOG_FILE="$STATE_DIR/kindle.log"
 STOP_FILE="$STATE_DIR/stop"
 
@@ -9,6 +10,10 @@ mkdir -p "$STATE_DIR"
 touch "$STOP_FILE"
 
 show_message() {
+  if [ "${QUIET:-0}" = "1" ]; then
+    return 0
+  fi
+
   if command -v eips >/dev/null 2>&1; then
     eips -c
     eips 2 2 "ZeitPlan"
@@ -40,5 +45,20 @@ ps 2>/dev/null | grep '[h]ome-kindle-today-plan.sh' | awk '{print $1}' | while r
   fi
 done
 
-rm -f "$PID_FILE"
+if [ -f "$TOUCH_PID_FILE" ]; then
+  TOUCH_PID="$(cat "$TOUCH_PID_FILE" 2>/dev/null || true)"
+  if [ -n "$TOUCH_PID" ] && kill -0 "$TOUCH_PID" 2>/dev/null; then
+    kill "$TOUCH_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped ZeitPlan touch controls. pid=$TOUCH_PID" >> "$LOG_FILE"
+  fi
+fi
+
+ps 2>/dev/null | grep '[t]ouch-buttons.sh' | awk '{print $1}' | while read -r OLD_TOUCH_PID; do
+  if [ -n "$OLD_TOUCH_PID" ]; then
+    kill "$OLD_TOUCH_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped extra ZeitPlan touch controls. pid=$OLD_TOUCH_PID" >> "$LOG_FILE"
+  fi
+done
+
+rm -f "$PID_FILE" "$TOUCH_PID_FILE"
 show_message "Stopped sync" "${PID:+pid=$PID}"

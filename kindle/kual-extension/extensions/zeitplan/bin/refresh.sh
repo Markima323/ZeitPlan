@@ -21,6 +21,10 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 show_message() {
+  if [ "${QUIET:-0}" = "1" ]; then
+    return 0
+  fi
+
   if command -v eips >/dev/null 2>&1; then
     eips -c
     eips 2 2 "ZeitPlan"
