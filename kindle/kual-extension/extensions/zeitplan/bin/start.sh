@@ -5,6 +5,7 @@ STATE_DIR="$APP_DIR/state"
 SCRIPT="$APP_DIR/home-kindle-today-plan.sh"
 PID_FILE="$STATE_DIR/zeitplan.pid"
 LOG_FILE="$STATE_DIR/kindle.log"
+STOP_FILE="$STATE_DIR/stop"
 
 mkdir -p "$STATE_DIR"
 
@@ -41,7 +42,7 @@ ps 2>/dev/null | grep '[h]ome-kindle-today-plan.sh' | awk '{print $1}' | while r
   fi
 done
 
-rm -f "$PID_FILE"
+rm -f "$PID_FILE" "$STOP_FILE"
 
 nohup sh "$SCRIPT" >> "$LOG_FILE" 2>&1 &
 echo "$!" > "$PID_FILE"

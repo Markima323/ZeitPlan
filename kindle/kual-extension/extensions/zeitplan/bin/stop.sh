@@ -3,8 +3,10 @@
 STATE_DIR="/mnt/us/home-kindle-today-plan/state"
 PID_FILE="$STATE_DIR/zeitplan.pid"
 LOG_FILE="$STATE_DIR/kindle.log"
+STOP_FILE="$STATE_DIR/stop"
 
 mkdir -p "$STATE_DIR"
+touch "$STOP_FILE"
 
 show_message() {
   if command -v eips >/dev/null 2>&1; then

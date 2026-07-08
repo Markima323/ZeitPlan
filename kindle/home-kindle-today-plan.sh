@@ -12,6 +12,9 @@ VERSION_FILE="$STATE_DIR/version"
 EVENT_FILE="$STATE_DIR/event.json"
 HTTP_FILE="$STATE_DIR/http_code"
 IMAGE_HTTP_FILE="$STATE_DIR/image_http_code"
+PULL_RESPONSE_FILE="$STATE_DIR/pull.json"
+PULL_HTTP_FILE="$STATE_DIR/pull_http_code"
+STOP_FILE="$STATE_DIR/stop"
 
 mkdir -p "$STATE_DIR"
 
@@ -103,6 +106,30 @@ is_png_file() {
   [ "$(file_header_hex "$1")" = "89504e470d0a1a0a" ]
 }
 
+request_pull() {
+  rm -f "$PULL_RESPONSE_FILE" "$PULL_HTTP_FILE"
+  curl \
+    --silent \
+    --show-error \
+    --location \
+    --max-time 25 \
+    --request POST \
+    --output "$PULL_RESPONSE_FILE" \
+    --write-out "%{http_code}" \
+    -H "access-token: $API_KEY" \
+    -H "width: $WIDTH" \
+    -H "height: $HEIGHT" \
+    "$BASE_URL/api/kindle/pull" > "$PULL_HTTP_FILE"
+
+  PULL_CURL_EXIT="$?"
+  PULL_HTTP_CODE="$(cat "$PULL_HTTP_FILE" 2>/dev/null || echo 000)"
+  if [ "$PULL_CURL_EXIT" = "0" ] && [ "$PULL_HTTP_CODE" = "200" ]; then
+    log "Startup pull requested successfully. width=$WIDTH height=$HEIGHT"
+  else
+    log "Startup pull failed. curl_exit=$PULL_CURL_EXIT http_code=$PULL_HTTP_CODE"
+  fi
+}
+
 backoff_seconds() {
   case "$1" in
     0|1) echo 2 ;;
@@ -114,8 +141,15 @@ backoff_seconds() {
 
 ERROR_COUNT=0
 log "ZeitPlan Kindle client started. base_url=$BASE_URL width=$WIDTH height=$HEIGHT version=$VERSION"
+request_pull
 
 while true; do
+  if [ -f "$STOP_FILE" ]; then
+    log "Stop file detected. exiting client."
+    rm -f "$STOP_FILE"
+    exit 0
+  fi
+
   rm -f "$EVENT_FILE" "$HTTP_FILE" "$IMAGE_HTTP_FILE"
   curl \
     --silent \
