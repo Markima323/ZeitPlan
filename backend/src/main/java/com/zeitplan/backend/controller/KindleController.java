@@ -56,7 +56,7 @@ public class KindleController {
         );
     }
 
-    @GetMapping("/kindle/screens/{screenId}.png")
+    @GetMapping({"/kindle/screens/{screenId}.png", "/api/kindle/screens/{screenId}.png"})
     public ResponseEntity<byte[]> getScreenImage(
             @PathVariable String screenId,
             @RequestParam("device") String deviceId,

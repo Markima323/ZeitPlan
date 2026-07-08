@@ -357,7 +357,7 @@ public class KindlePushService {
         int height = screen.getImageHeight();
         String signature = signImageUrl(screen.getId(), screen.getDeviceId(), screen.getVersion(), width, height, expires);
         return baseUrl
-                + "/kindle/screens/" + encode(screen.getId()) + ".png"
+                + "/api/kindle/screens/" + encode(screen.getId()) + ".png"
                 + "?device=" + encode(screen.getDeviceId())
                 + "&v=" + screen.getVersion()
                 + "&w=" + width

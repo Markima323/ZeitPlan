@@ -33,7 +33,8 @@ public class AuthSessionFilter extends OncePerRequestFilter {
 
         return !path.startsWith("/api/")
                 || path.startsWith("/api/auth/")
-                || path.equals("/api/kindle/events");
+                || path.equals("/api/kindle/events")
+                || path.startsWith("/api/kindle/screens/");
     }
 
     @Override
