@@ -210,16 +210,6 @@ export function TodayPlanPage({
 
           <p className="today-summary-line">{summaryLine}</p>
 
-          {kindleStatus ? (
-            <div className="today-kindle-status">
-              <span className={kindleStatus.online ? "kindle-status-dot online" : "kindle-status-dot"} />
-              <div>
-                <strong>{kindleStatus.online ? "Kindle 已连接" : "Kindle 未连接"}</strong>
-                <p>最后推送 {kindleStatus.lastPushedAt} · 当前显示：{kindleStatus.currentTitle}</p>
-              </div>
-            </div>
-          ) : null}
-
           <div className="today-actions">
             <Link className="primary-button" to="/planner">
               编辑今日计划
@@ -252,6 +242,16 @@ export function TodayPlanPage({
             </>
           )}
         </aside>
+      </section>
+
+      <section className="content-panel secondary-panel today-kindle-panel">
+        <div className="today-kindle-status prominent-kindle-status">
+          <span className={kindleStatus.online ? "kindle-status-dot online" : "kindle-status-dot"} />
+          <div>
+            <strong>{kindleStatus.online ? "Kindle 已连接" : "Kindle 未连接"}</strong>
+            <p>最后推送 {kindleStatus.lastPushedAt} · 当前显示：{kindleStatus.currentTitle}</p>
+          </div>
+        </div>
       </section>
 
       <section className="content-panel secondary-panel today-table-panel">

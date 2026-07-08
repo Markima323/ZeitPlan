@@ -88,7 +88,6 @@ public class KindleScreenRenderer {
             drawLine(graphics, margin, footerY - Math.max(28, height / 55), width - margin);
             graphics.setColor(new Color(80, 80, 80));
             drawText(graphics, "\u6700\u8fd1\u66f4\u65b0\uff1a" + snapshot.generatedAt().format(DateTimeFormatter.ofPattern("HH:mm")), margin, footerY, footerFont, contentWidth);
-            drawActionButtons(graphics, width, height, margin, footerFont);
 
             return writeEightBitGrayscalePng(image);
         } catch (IOException exception) {
@@ -348,42 +347,4 @@ public class KindleScreenRenderer {
         graphics.setColor(Color.BLACK);
     }
 
-    private void drawActionButtons(Graphics2D graphics, int width, int height, int margin, Font font) {
-        graphics.setFont(font);
-        FontMetrics metrics = graphics.getFontMetrics();
-        String updateLabel = "\u66f4\u65b0";
-        String exitLabel = "\u9000\u51fa";
-        int paddingX = Math.max(14, width / 45);
-        int paddingY = Math.max(8, height / 120);
-        int gap = Math.max(10, width / 80);
-        int updateButtonWidth = metrics.stringWidth(updateLabel) + (paddingX * 2);
-        int exitButtonWidth = metrics.stringWidth(exitLabel) + (paddingX * 2);
-        int buttonHeight = metrics.getHeight() + (paddingY * 2);
-        int y = height - margin - buttonHeight;
-        int exitX = width - margin - exitButtonWidth;
-        int updateX = exitX - gap - updateButtonWidth;
-
-        drawButton(graphics, updateLabel, updateX, y, updateButtonWidth, buttonHeight, paddingX, paddingY, metrics);
-        drawButton(graphics, exitLabel, exitX, y, exitButtonWidth, buttonHeight, paddingX, paddingY, metrics);
-    }
-
-    private void drawButton(
-            Graphics2D graphics,
-            String label,
-            int x,
-            int y,
-            int width,
-            int height,
-            int paddingX,
-            int paddingY,
-            FontMetrics metrics
-    ) {
-        graphics.setColor(Color.WHITE);
-        graphics.fillRoundRect(x, y, width, height, 16, 16);
-        graphics.setColor(new Color(90, 90, 90));
-        graphics.setStroke(new BasicStroke(2f));
-        graphics.drawRoundRect(x, y, width, height, 16, 16);
-        graphics.setColor(Color.BLACK);
-        graphics.drawString(label, x + paddingX, y + paddingY + metrics.getAscent());
-    }
 }

@@ -1956,6 +1956,15 @@ body {
   color: var(--muted);
 }
 
+.today-kindle-panel {
+  padding: 14px 18px;
+}
+
+.prominent-kindle-status {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .today-kindle-status p {
   margin: 2px 0 0;
 }
