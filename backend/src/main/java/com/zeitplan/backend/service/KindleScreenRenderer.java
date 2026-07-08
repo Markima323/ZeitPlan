@@ -87,7 +87,7 @@ public class KindleScreenRenderer {
             drawText(graphics, "\u6700\u8fd1\u66f4\u65b0\uff1a" + snapshot.generatedAt().format(DateTimeFormatter.ofPattern("HH:mm")), margin, footerY, footerFont, contentWidth);
             drawUpdateHint(graphics, width, height, margin, footerFont);
 
-            return writeFourBitGrayscalePng(image);
+            return writeEightBitGrayscalePng(image);
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to render Kindle screen", exception);
         } finally {
@@ -95,7 +95,7 @@ public class KindleScreenRenderer {
         }
     }
 
-    private byte[] writeFourBitGrayscalePng(BufferedImage source) throws IOException {
+    private byte[] writeEightBitGrayscalePng(BufferedImage source) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         DataOutputStream data = new DataOutputStream(output);
         data.write(new byte[] {
@@ -106,30 +106,20 @@ public class KindleScreenRenderer {
         DataOutputStream ihdr = new DataOutputStream(ihdrBytes);
         ihdr.writeInt(source.getWidth());
         ihdr.writeInt(source.getHeight());
-        ihdr.writeByte(4);
+        ihdr.writeByte(8);
         ihdr.writeByte(0);
         ihdr.writeByte(0);
         ihdr.writeByte(0);
         ihdr.writeByte(0);
         writePngChunk(data, "IHDR", ihdrBytes.toByteArray());
 
-        int rowByteCount = (source.getWidth() + 1) / 2;
+        int rowByteCount = source.getWidth();
         ByteArrayOutputStream rawImage = new ByteArrayOutputStream((rowByteCount + 1) * source.getHeight());
         byte[] row = new byte[rowByteCount];
         for (int y = 0; y < source.getHeight(); y += 1) {
             rawImage.write(0);
-            for (int index = 0; index < row.length; index += 1) {
-                row[index] = 0;
-            }
-
             for (int x = 0; x < source.getWidth(); x += 1) {
-                int level = grayLevel(source.getRGB(x, y));
-                int rowIndex = x / 2;
-                if (x % 2 == 0) {
-                    row[rowIndex] = (byte) (level << 4);
-                } else {
-                    row[rowIndex] = (byte) (row[rowIndex] | level);
-                }
+                row[x] = (byte) grayscale(source.getRGB(x, y));
             }
             rawImage.write(row);
         }
@@ -143,12 +133,11 @@ public class KindleScreenRenderer {
         return output.toByteArray();
     }
 
-    private int grayLevel(int rgb) {
+    private int grayscale(int rgb) {
         int red = (rgb >> 16) & 0xff;
         int green = (rgb >> 8) & 0xff;
         int blue = rgb & 0xff;
-        int luminance = ((red * 299) + (green * 587) + (blue * 114) + 500) / 1000;
-        return Math.max(0, Math.min(15, (luminance + 8) / 17));
+        return ((red * 299) + (green * 587) + (blue * 114) + 500) / 1000;
     }
 
     private void writePngChunk(DataOutputStream output, String type, byte[] payload) throws IOException {

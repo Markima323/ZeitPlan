@@ -14,7 +14,7 @@ class KindleScreenRendererTests {
     private final KindleScreenRenderer renderer = new KindleScreenRenderer();
 
     @Test
-    void renderUsesEipsFriendlyIndexedPng() {
+    void renderUsesEipsFriendlyGrayscalePng() {
         KindleTodaySnapshot snapshot = new KindleTodaySnapshot(
                 LocalDate.of(2026, 7, 8),
                 "task-1",
@@ -31,7 +31,7 @@ class KindleScreenRendererTests {
 
         assertThat(header.width()).isEqualTo(536);
         assertThat(header.height()).isEqualTo(724);
-        assertThat(header.bitDepth()).isEqualTo(4);
+        assertThat(header.bitDepth()).isEqualTo(8);
         assertThat(header.colorType()).isEqualTo(0);
     }
 
