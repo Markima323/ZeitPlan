@@ -12,5 +12,7 @@ public interface KindleDeviceRepository extends JpaRepository<KindleDeviceEntity
 
     List<KindleDeviceEntity> findAllByOwnerUserIdAndEnabledTrueOrderByCreatedAtAsc(String ownerUserId);
 
+    List<KindleDeviceEntity> findAllByOwnerUserIdAndEnabledTrueAndAutoPushEnabledTrueOrderByCreatedAtAsc(String ownerUserId);
+
     Optional<KindleDeviceEntity> findByDeviceTokenHash(String deviceTokenHash);
 }

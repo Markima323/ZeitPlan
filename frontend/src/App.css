@@ -2321,6 +2321,61 @@ body {
   font-weight: 700;
 }
 
+.kindle-auto-push-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(117, 87, 54, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.kindle-auto-push-row p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.kindle-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 92px;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid rgba(117, 87, 54, 0.16);
+  border-radius: 999px;
+  background: rgba(248, 240, 231, 0.82);
+  color: var(--muted);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.kindle-toggle-button span {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(108, 92, 75, 0.32);
+}
+
+.kindle-toggle-button.active {
+  border-color: rgba(77, 143, 95, 0.26);
+  background: rgba(232, 246, 236, 0.9);
+  color: #346b45;
+}
+
+.kindle-toggle-button.active span {
+  background: #4d8f5f;
+}
+
+.kindle-toggle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .admin-summary-pill,
 .dice-status-pill {
   display: inline-flex;
@@ -2832,6 +2887,7 @@ body {
   }
 
   .kindle-create-form,
+  .kindle-auto-push-row,
   .kindle-current-screen {
     width: 100%;
     flex-direction: column;

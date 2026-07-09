@@ -15,6 +15,7 @@ public record KindleDeviceResponse(
         String lastRenderStatus,
         String lastErrorMessage,
         OffsetDateTime lastPushedAt,
-        boolean enabled
+        boolean enabled,
+        boolean autoPushEnabled
 ) {
 }

@@ -33,8 +33,14 @@ SCHEDULED_WAKE_END_HOUR="${SCHEDULED_WAKE_END_HOUR:-0}"
 SCHEDULED_WAKE_MINUTES="${SCHEDULED_WAKE_MINUTES:-1 6 31 36}"
 SCHEDULED_WAKE_MIN_LEAD_SECONDS="${SCHEDULED_WAKE_MIN_LEAD_SECONDS:-30}"
 SCHEDULED_WAKE_WIFI_ENABLE="${SCHEDULED_WAKE_WIFI_ENABLE:-1}"
-SCHEDULED_WAKE_WIFI_WAIT_SECONDS="${SCHEDULED_WAKE_WIFI_WAIT_SECONDS:-60}"
+SCHEDULED_WAKE_WIFI_WAIT_SECONDS="${SCHEDULED_WAKE_WIFI_WAIT_SECONDS:-120}"
 SCHEDULED_WAKE_AFTER_PULL_WAIT_SECONDS="${SCHEDULED_WAKE_AFTER_PULL_WAIT_SECONDS:-4}"
+SCHEDULED_WAKE_PULL_RETRIES="${SCHEDULED_WAKE_PULL_RETRIES:-4}"
+SCHEDULED_WAKE_EVENT_RETRIES="${SCHEDULED_WAKE_EVENT_RETRIES:-2}"
+SCHEDULED_WAKE_RETRY_DELAY_SECONDS="${SCHEDULED_WAKE_RETRY_DELAY_SECONDS:-10}"
+SCHEDULED_WAKE_SLEEP_AFTER_UPDATE="${SCHEDULED_WAKE_SLEEP_AFTER_UPDATE:-1}"
+SCHEDULED_WAKE_SLEEP_DELAY_SECONDS="${SCHEDULED_WAKE_SLEEP_DELAY_SECONDS:-8}"
+LOCKSCREEN_ONLY_TTL_SECONDS="${LOCKSCREEN_ONLY_TTL_SECONDS:-300}"
 
 if [ -f "$CONFIG_FILE" ]; then
   # shellcheck disable=SC1090
@@ -47,6 +53,13 @@ log() {
 
 cleanup_lockscreen_only_flag() {
   rm -f "$LOCKSCREEN_ONLY_FILE" 2>/dev/null || true
+}
+
+set_lockscreen_only_flag() {
+  now_epoch="$(date '+%s' 2>/dev/null || echo 0)"
+  ttl="$(to_number "$LOCKSCREEN_ONLY_TTL_SECONDS")"
+  [ "$ttl" -gt 0 ] 2>/dev/null || ttl=300
+  echo $((now_epoch + ttl)) > "$LOCKSCREEN_ONLY_FILE"
 }
 
 to_number() {
@@ -182,8 +195,38 @@ enable_wifi() {
     return 0
   fi
 
+  if command -v wpa_cli >/dev/null 2>&1; then
+    wpa_cli reassociate >/dev/null 2>&1 || true
+  fi
   lipc-set-prop com.lab126.wifid enable 1 >/dev/null 2>&1 || true
   lipc-set-prop com.lab126.cmd wirelessEnable 1 >/dev/null 2>&1 || true
+}
+
+reconnect_wifi_stage() {
+  stage="$1"
+
+  if command -v wpa_cli >/dev/null 2>&1; then
+    case "$stage" in
+      1)
+        wpa_cli reassociate >/dev/null 2>&1 || true
+        ;;
+      2)
+        wpa_cli disconnect >/dev/null 2>&1 || true
+        sleep 1
+        wpa_cli reconnect >/dev/null 2>&1 || true
+        ;;
+      *)
+        wpa_cli reconnect >/dev/null 2>&1 || true
+        ;;
+    esac
+  fi
+
+  if [ "$stage" -ge 3 ] 2>/dev/null; then
+    lipc-set-prop com.lab126.wifid enable 0 >/dev/null 2>&1 || true
+    sleep 2
+    lipc-set-prop com.lab126.wifid enable 1 >/dev/null 2>&1 || true
+    lipc-set-prop com.lab126.cmd wirelessEnable 1 >/dev/null 2>&1 || true
+  fi
 }
 
 wait_for_wifi() {
@@ -194,6 +237,16 @@ wait_for_wifi() {
   elapsed=0
   limit="$(to_number "$SCHEDULED_WAKE_WIFI_WAIT_SECONDS")"
   while [ "$elapsed" -lt "$limit" ]; do
+    if [ "$elapsed" -eq 0 ]; then
+      reconnect_wifi_stage 1
+    elif [ "$elapsed" -eq 10 ]; then
+      reconnect_wifi_stage 2
+    elif [ "$elapsed" -eq 30 ]; then
+      reconnect_wifi_stage 3
+    elif [ "$elapsed" -eq 60 ]; then
+      reconnect_wifi_stage 4
+    fi
+
     state="$(lipc-get-prop com.lab126.wifid cmState 2>/dev/null || true)"
     case "$state" in
       *CONNECTED*)
@@ -300,28 +353,39 @@ refresh_linkss_lockscreen() {
 }
 
 request_pull() {
-  rm -f "$PULL_RESPONSE_FILE" "$PULL_HTTP_FILE"
-  curl \
-    --silent \
-    --show-error \
-    --location \
-    --max-time 25 \
-    --request POST \
-    --output "$PULL_RESPONSE_FILE" \
-    --write-out "%{http_code}" \
-    -H "access-token: $API_KEY" \
-    -H "width: $WIDTH" \
-    -H "height: $HEIGHT" \
-    "$BASE_URL/api/kindle/pull" > "$PULL_HTTP_FILE"
+  attempt=1
+  max_attempts="$(to_number "$SCHEDULED_WAKE_PULL_RETRIES")"
+  [ "$max_attempts" -ge 1 ] 2>/dev/null || max_attempts=1
 
-  pull_curl_exit="$?"
-  pull_http_code="$(cat "$PULL_HTTP_FILE" 2>/dev/null || echo 000)"
-  if [ "$pull_curl_exit" = "0" ] && [ "$pull_http_code" = "200" ]; then
-    log "Wake pull requested successfully. width=$WIDTH height=$HEIGHT"
-    return 0
-  fi
+  while [ "$attempt" -le "$max_attempts" ]; do
+    rm -f "$PULL_RESPONSE_FILE" "$PULL_HTTP_FILE"
+    curl \
+      --silent \
+      --show-error \
+      --location \
+      --max-time 25 \
+      --request POST \
+      --output "$PULL_RESPONSE_FILE" \
+      --write-out "%{http_code}" \
+      -H "access-token: $API_KEY" \
+      -H "auto-pull: true" \
+      -H "width: $WIDTH" \
+      -H "height: $HEIGHT" \
+      "$BASE_URL/api/kindle/pull" > "$PULL_HTTP_FILE"
 
-  log "Wake pull failed. curl_exit=$pull_curl_exit http_code=$pull_http_code"
+    pull_curl_exit="$?"
+    pull_http_code="$(cat "$PULL_HTTP_FILE" 2>/dev/null || echo 000)"
+    if [ "$pull_curl_exit" = "0" ] && [ "$pull_http_code" = "200" ]; then
+      log "Wake pull requested successfully. width=$WIDTH height=$HEIGHT attempt=$attempt"
+      return 0
+    fi
+
+    log "Wake pull failed. curl_exit=$pull_curl_exit http_code=$pull_http_code attempt=$attempt"
+    reconnect_wifi_stage "$attempt"
+    sleep "$(to_number "$SCHEDULED_WAKE_RETRY_DELAY_SECONDS")"
+    attempt=$((attempt + 1))
+  done
+
   return 1
 }
 
@@ -331,29 +395,43 @@ poll_and_apply_update() {
     version="$(cat "$VERSION_FILE" 2>/dev/null || echo 0)"
   fi
 
-  rm -f "$EVENT_FILE" "$HTTP_FILE" "$IMAGE_HTTP_FILE"
-  curl \
-    --silent \
-    --show-error \
-    --location \
-    --max-time 65 \
-    --output "$EVENT_FILE" \
-    --write-out "%{http_code}" \
-    -H "access-token: $API_KEY" \
-    -H "width: $WIDTH" \
-    -H "height: $HEIGHT" \
-    "$BASE_URL/api/kindle/events?since=$version" > "$HTTP_FILE"
+  attempt=1
+  max_attempts="$(to_number "$SCHEDULED_WAKE_EVENT_RETRIES")"
+  [ "$max_attempts" -ge 1 ] 2>/dev/null || max_attempts=1
 
-  event_curl_exit="$?"
-  event_http_code="$(cat "$HTTP_FILE" 2>/dev/null || echo 000)"
+  while [ "$attempt" -le "$max_attempts" ]; do
+    rm -f "$EVENT_FILE" "$HTTP_FILE" "$IMAGE_HTTP_FILE"
+    curl \
+      --silent \
+      --show-error \
+      --location \
+      --max-time 65 \
+      --output "$EVENT_FILE" \
+      --write-out "%{http_code}" \
+      -H "access-token: $API_KEY" \
+      -H "width: $WIDTH" \
+      -H "height: $HEIGHT" \
+      "$BASE_URL/api/kindle/events?since=$version" > "$HTTP_FILE"
 
-  if [ "$event_curl_exit" = "0" ] && [ "$event_http_code" = "204" ]; then
-    log "Wake event poll returned no new content. another client may have already applied the update. since=$version"
-    return 0
-  fi
+    event_curl_exit="$?"
+    event_http_code="$(cat "$HTTP_FILE" 2>/dev/null || echo 000)"
+
+    if [ "$event_curl_exit" = "0" ] && [ "$event_http_code" = "204" ]; then
+      log "Wake event poll returned no new content. another client may have already applied the update. since=$version attempt=$attempt"
+      return 0
+    fi
+
+    if [ "$event_curl_exit" = "0" ] && [ "$event_http_code" = "200" ]; then
+      break
+    fi
+
+    log "Wake event poll failed. curl_exit=$event_curl_exit http_code=$event_http_code since=$version attempt=$attempt"
+    reconnect_wifi_stage "$attempt"
+    sleep "$(to_number "$SCHEDULED_WAKE_RETRY_DELAY_SECONDS")"
+    attempt=$((attempt + 1))
+  done
 
   if [ "$event_curl_exit" != "0" ] || [ "$event_http_code" != "200" ]; then
-    log "Wake event poll failed. curl_exit=$event_curl_exit http_code=$event_http_code since=$version"
     return 1
   fi
 
@@ -376,6 +454,19 @@ poll_and_apply_update() {
   return 1
 }
 
+request_sleep_after_update() {
+  if [ "$SCHEDULED_WAKE_SLEEP_AFTER_UPDATE" != "1" ]; then
+    return 0
+  fi
+
+  delay="$(to_number "$SCHEDULED_WAKE_SLEEP_DELAY_SECONDS")"
+  sleep "$delay"
+  if command -v lipc-set-prop >/dev/null 2>&1; then
+    lipc-set-prop com.lab126.powerd powerButton 1 >/dev/null 2>&1 || true
+    log "Wake scheduler requested sleep after update."
+  fi
+}
+
 run_wake_update() {
   if [ "$BASE_URL" = "https://zeitplan.example.com" ] || [ -z "$BASE_URL" ]; then
     log "Wake update skipped. BASE_URL is not configured."
@@ -389,15 +480,15 @@ run_wake_update() {
 
   enable_wifi
   wait_for_wifi || true
-  touch "$LOCKSCREEN_ONLY_FILE"
+  set_lockscreen_only_flag
   request_pull || {
-    cleanup_lockscreen_only_flag
+    request_sleep_after_update
     return 1
   }
   sleep "$(to_number "$SCHEDULED_WAKE_AFTER_PULL_WAIT_SECONDS")"
   poll_and_apply_update
   result="$?"
-  cleanup_lockscreen_only_flag
+  request_sleep_after_update
   return "$result"
 }
 

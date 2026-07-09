@@ -2,6 +2,8 @@ package com.zeitplan.backend.controller;
 
 import com.zeitplan.backend.dto.KindleCreateDeviceRequest;
 import com.zeitplan.backend.dto.KindleCreateDeviceResponse;
+import com.zeitplan.backend.dto.KindleAutoPushRequest;
+import com.zeitplan.backend.dto.KindleDeviceResponse;
 import com.zeitplan.backend.dto.KindleDevicesResponse;
 import com.zeitplan.backend.dto.KindleEventResponse;
 import com.zeitplan.backend.dto.KindleRepushResponse;
@@ -12,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -66,6 +69,7 @@ public class KindleController {
             @RequestHeader(name = "id", required = false) String deviceIdentifier,
             @RequestHeader(name = "model", required = false) String model,
             @RequestHeader(name = "fw-version", required = false) String fwVersion,
+            @RequestHeader(name = "auto-pull", required = false, defaultValue = "false") boolean automaticPull,
             HttpServletRequest request
     ) {
         return kindlePushService.pullCurrentScreen(
@@ -79,7 +83,8 @@ public class KindleController {
                         model,
                         fwVersion
                 ),
-                request
+                request,
+                automaticPull
         );
     }
 
@@ -122,5 +127,13 @@ public class KindleController {
     @PostMapping("/api/kindle/devices/{deviceId}/repush-today-plan")
     public KindleRepushResponse repushTodayPlan(@PathVariable String deviceId) {
         return kindlePushService.repushTodayPlan(deviceId);
+    }
+
+    @PutMapping("/api/kindle/devices/{deviceId}/auto-push")
+    public KindleDeviceResponse updateAutoPush(
+            @PathVariable String deviceId,
+            @RequestBody KindleAutoPushRequest request
+    ) {
+        return kindlePushService.updateAutoPush(deviceId, request.autoPushEnabled());
     }
 }

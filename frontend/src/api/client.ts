@@ -212,6 +212,12 @@ export const apiClient = {
       method: "POST",
     }, { timeoutMs: 15000 });
   },
+  updateKindleAutoPush(deviceId: string, autoPushEnabled: boolean) {
+    return request<KindleDevicesResponse["devices"][number]>(`/kindle/devices/${deviceId}/auto-push`, {
+      method: "PUT",
+      body: JSON.stringify({ autoPushEnabled }),
+    }, { timeoutMs: 8000 });
+  },
   getDiceHistory(date: string) {
     return request<DiceRollResponse[]>(`/plans/${date}/dice-rolls`);
   },

@@ -112,6 +112,7 @@ public class KindlePushService {
         device.setDeviceTokenHash(hashToken(token));
         device.setCurrentVersion(0);
         device.setEnabled(true);
+        device.setAutoPushEnabled(true);
 
         KindleDeviceEntity savedDevice = kindleDeviceRepository.save(device);
         renderAndPublish(savedDevice, kindleTodaySnapshotService.getCurrentSnapshot(), "device_registered");
@@ -242,7 +243,8 @@ public class KindlePushService {
     public KindleRepushResponse pullCurrentScreen(
             String accessToken,
             KindleTelemetry telemetry,
-            HttpServletRequest request
+            HttpServletRequest request,
+            boolean automaticPull
     ) {
         KindleDeviceEntity device = authenticateDevice(accessToken)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Kindle 设备认证失败"));
@@ -253,6 +255,10 @@ public class KindlePushService {
 
         updateTelemetry(device, telemetry, request);
         KindleDeviceEntity savedDevice = kindleDeviceRepository.save(device);
+        if (automaticPull && !savedDevice.isAutoPushEnabled()) {
+            return new KindleRepushResponse(false, savedDevice.getCurrentVersion(), "auto_push_disabled");
+        }
+
         KindleTodaySnapshot snapshot = kindleTodaySnapshotService.getCurrentSnapshot();
         int version = renderAndPublish(savedDevice, snapshot, "device_pull");
         lastSnapshotFingerprintByOwner.put(OWNER_USER_ID, snapshot.fingerprint());
@@ -277,6 +283,18 @@ public class KindlePushService {
         return new KindleRepushResponse(true, version, "queued");
     }
 
+    public KindleDeviceResponse updateAutoPush(String deviceId, boolean autoPushEnabled) {
+        KindleDeviceEntity device = kindleDeviceRepository.findById(deviceId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Kindle device not found"));
+
+        if (!OWNER_USER_ID.equals(device.getOwnerUserId())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Kindle device not found");
+        }
+
+        device.setAutoPushEnabled(autoPushEnabled);
+        return toDeviceResponse(kindleDeviceRepository.save(device));
+    }
+
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleTodayPlanChanged(TodayPlanChangedEvent event) {
         LocalDate today = LocalDate.now(clock.withZone(zoneId));
@@ -296,7 +314,7 @@ public class KindlePushService {
     }
 
     private void pushCurrentSnapshotIfChanged(String changeReason) {
-        List<KindleDeviceEntity> devices = kindleDeviceRepository.findAllByOwnerUserIdAndEnabledTrueOrderByCreatedAtAsc(OWNER_USER_ID);
+        List<KindleDeviceEntity> devices = kindleDeviceRepository.findAllByOwnerUserIdAndEnabledTrueAndAutoPushEnabledTrueOrderByCreatedAtAsc(OWNER_USER_ID);
         if (devices.isEmpty()) {
             return;
         }
@@ -384,7 +402,8 @@ public class KindlePushService {
                 screen == null ? null : screen.getRenderStatus(),
                 screen == null ? null : screen.getErrorMessage(),
                 screen == null ? null : screen.getRenderedAt(),
-                device.isEnabled()
+                device.isEnabled(),
+                device.isAutoPushEnabled()
         );
     }
 

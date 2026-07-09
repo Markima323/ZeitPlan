@@ -125,6 +125,28 @@ is_pdf_file() {
   [ "$(file_header_hex "$1" | cut -c1-10)" = "255044462d" ]
 }
 
+is_lockscreen_only_update() {
+  if [ ! -f "$LOCKSCREEN_ONLY_FILE" ]; then
+    return 1
+  fi
+
+  expires_at="$(cat "$LOCKSCREEN_ONLY_FILE" 2>/dev/null || true)"
+  case "$expires_at" in
+    ''|*[!0-9]*)
+      rm -f "$LOCKSCREEN_ONLY_FILE" 2>/dev/null || true
+      return 1
+      ;;
+  esac
+
+  now_epoch="$(date '+%s' 2>/dev/null || echo 0)"
+  if [ "$now_epoch" -le "$expires_at" ] 2>/dev/null; then
+    return 0
+  fi
+
+  rm -f "$LOCKSCREEN_ONLY_FILE" 2>/dev/null || true
+  return 1
+}
+
 open_document() {
   if ! command -v lipc-set-prop >/dev/null 2>&1; then
     log "Reader open failed. lipc-set-prop command not found."
@@ -442,7 +464,7 @@ while true; do
     log "Screen update received. version=$NEW_VERSION image_url=$IMAGE_URL"
     PNG_READY=0
     LOCKSCREEN_ONLY_UPDATE=0
-    if [ -f "$LOCKSCREEN_ONLY_FILE" ]; then
+    if is_lockscreen_only_update; then
       LOCKSCREEN_ONLY_UPDATE=1
     fi
 

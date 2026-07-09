@@ -51,6 +51,7 @@ export function AdminPage() {
   const [isKindleLoading, setIsKindleLoading] = useState(true);
   const [isCreatingKindleDevice, setIsCreatingKindleDevice] = useState(false);
   const [repushingDeviceId, setRepushingDeviceId] = useState<string | null>(null);
+  const [updatingAutoPushDeviceId, setUpdatingAutoPushDeviceId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,6 +174,28 @@ export function AdminPage() {
     }
   }
 
+  async function handleAutoPushChange(deviceId: string, autoPushEnabled: boolean) {
+    const previousDevices = kindleDevices;
+    setUpdatingAutoPushDeviceId(deviceId);
+    setKindleFeedback(null);
+    setKindleDevices((devices) =>
+      devices.map((device) => (device.id === deviceId ? { ...device, autoPushEnabled } : device)),
+    );
+
+    try {
+      const updatedDevice = await apiClient.updateKindleAutoPush(deviceId, autoPushEnabled);
+      setKindleDevices((devices) =>
+        devices.map((device) => (device.id === deviceId ? updatedDevice : device)),
+      );
+      setKindleFeedback(autoPushEnabled ? "已开启 Kindle 自动推送。" : "已关闭 Kindle 自动推送。手动推送仍然可用。");
+    } catch (error) {
+      setKindleDevices(previousDevices);
+      setKindleFeedback(error instanceof Error ? error.message : "更新 Kindle 自动推送设置失败");
+    } finally {
+      setUpdatingAutoPushDeviceId(null);
+    }
+  }
+
   return (
     <div className="page-stack">
       {feedback ? <div className="feedback-banner">{feedback}</div> : null}
@@ -278,6 +301,23 @@ export function AdminPage() {
                 <span>当前显示</span>
                 <strong>{device.currentScreenTitle ?? "暂无画面"}</strong>
                 {device.lastErrorMessage ? <p>{device.lastErrorMessage}</p> : null}
+              </div>
+
+              <div className="kindle-auto-push-row">
+                <div>
+                  <strong>{device.autoPushEnabled ? "自动推送已开启" : "自动推送已关闭"}</strong>
+                  <p>开启后，今日计划当前事项变化时会自动更新 Kindle；关闭后仍可手动推送。</p>
+                </div>
+                <button
+                  className={`kindle-toggle-button${device.autoPushEnabled ? " active" : ""}`}
+                  type="button"
+                  aria-pressed={device.autoPushEnabled}
+                  onClick={() => void handleAutoPushChange(device.id, !device.autoPushEnabled)}
+                  disabled={updatingAutoPushDeviceId === device.id || !device.enabled}
+                >
+                  <span />
+                  {device.autoPushEnabled ? "开启" : "关闭"}
+                </button>
               </div>
 
               <button

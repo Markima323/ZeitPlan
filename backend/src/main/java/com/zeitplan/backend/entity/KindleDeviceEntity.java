@@ -63,6 +63,9 @@ public class KindleDeviceEntity {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    @Column(name = "auto_push_enabled", nullable = false)
+    private boolean autoPushEnabled = true;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -197,5 +200,13 @@ public class KindleDeviceEntity {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isAutoPushEnabled() {
+        return autoPushEnabled;
+    }
+
+    public void setAutoPushEnabled(boolean autoPushEnabled) {
+        this.autoPushEnabled = autoPushEnabled;
     }
 }

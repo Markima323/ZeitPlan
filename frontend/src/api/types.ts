@@ -82,6 +82,7 @@ export interface KindleDevice {
   lastErrorMessage: string | null;
   lastPushedAt: string | null;
   enabled: boolean;
+  autoPushEnabled: boolean;
 }
 
 export interface KindleDevicesResponse {
