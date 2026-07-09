@@ -4,6 +4,9 @@ APP_DIR="/mnt/us/home-kindle-today-plan"
 STATE_DIR="$APP_DIR/state"
 CONFIG_FILE="$APP_DIR/config.sh"
 LOG_FILE="$STATE_DIR/kindle.log"
+SCRIPT="$APP_DIR/home-kindle-today-plan.sh"
+PID_FILE="$STATE_DIR/zeitplan.pid"
+STOP_FILE="$STATE_DIR/stop"
 PULL_RESPONSE_FILE="$STATE_DIR/pull.json"
 PULL_HTTP_FILE="$STATE_DIR/pull_http_code"
 
@@ -14,6 +17,7 @@ API_KEY="${API_KEY:-replace-with-device-token}"
 WIDTH="${WIDTH:-600}"
 HEIGHT="${HEIGHT:-800}"
 AUTO_DETECT_SCREEN_SIZE="${AUTO_DETECT_SCREEN_SIZE:-1}"
+REFRESH_RESTART_CLIENT="${REFRESH_RESTART_CLIENT:-1}"
 
 if [ -f "$CONFIG_FILE" ]; then
   # shellcheck disable=SC1090
@@ -37,6 +41,39 @@ show_message() {
 
 log() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
+}
+
+restart_client() {
+  if [ "$REFRESH_RESTART_CLIENT" != "1" ]; then
+    return 0
+  fi
+
+  if [ ! -f "$SCRIPT" ]; then
+    log "Manual update skipped client restart. missing script=$SCRIPT"
+    return 0
+  fi
+
+  if [ -f "$PID_FILE" ]; then
+    PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+      kill "$PID" 2>/dev/null || true
+      log "Manual update stopped existing client. pid=$PID"
+      sleep 1
+    fi
+  fi
+
+  ps 2>/dev/null | grep '[h]ome-kindle-today-plan.sh' | awk '{print $1}' | while read -r OLD_PID; do
+    if [ -n "$OLD_PID" ]; then
+      kill "$OLD_PID" 2>/dev/null || true
+      log "Manual update stopped extra client process. pid=$OLD_PID"
+    fi
+  done
+
+  rm -f "$PID_FILE" "$STOP_FILE"
+  nohup sh "$SCRIPT" >> "$LOG_FILE" 2>&1 &
+  echo "$!" > "$PID_FILE"
+  log "Manual update restarted ZeitPlan client. pid=$!"
+  sleep 1
 }
 
 apply_screen_size() {
@@ -84,6 +121,8 @@ if [ "$API_KEY" = "replace-with-device-token" ] || [ -z "$API_KEY" ]; then
   log "Pull skipped. API_KEY is not configured."
   exit 1
 fi
+
+restart_client
 
 rm -f "$PULL_RESPONSE_FILE" "$PULL_HTTP_FILE"
 curl \

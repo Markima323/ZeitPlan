@@ -9,9 +9,16 @@ STARTUP_PULL="${STARTUP_PULL:-0}"
 DISPLAY_CLEAR_DELAY="${DISPLAY_CLEAR_DELAY:-1}"
 OPEN_AS_BOOK="${OPEN_AS_BOOK:-1}"
 STATE_DIR="${STATE_DIR:-/mnt/us/home-kindle-today-plan/state}"
-SCREEN_PATH="${SCREEN_PATH:-/mnt/us/home-kindle-today-plan/current.png}"
+SCREEN_PATH="${SCREEN_PATH:-/mnt/us/linkss/screensavers/bg_ss00.png}"
 DOCUMENT_DIR="${DOCUMENT_DIR:-/mnt/us/documents}"
 DOCUMENT_PREFIX="${DOCUMENT_PREFIX:-ZeitPlan_Today}"
+LOCKSCREEN_SYNC="${LOCKSCREEN_SYNC:-0}"
+LOCKSCREEN_DIR="${LOCKSCREEN_DIR:-/mnt/us/linkss/screensavers}"
+LOCKSCREEN_FILENAME="${LOCKSCREEN_FILENAME:-bg_ss00.png}"
+LOCKSCREEN_EXTRA_FILENAMES="${LOCKSCREEN_EXTRA_FILENAMES:-}"
+LOCKSCREEN_REFRESH="${LOCKSCREEN_REFRESH:-1}"
+LOCKSCREEN_CANONICAL_FILENAME="${LOCKSCREEN_CANONICAL_FILENAME:-bg_ss00.png}"
+LOCKSCREEN_SHUFFLE="${LOCKSCREEN_SHUFFLE:-1}"
 CONFIG_FILE="${CONFIG_FILE:-/mnt/us/home-kindle-today-plan/config.sh}"
 LOG_FILE="${LOG_FILE:-$STATE_DIR/kindle.log}"
 VERSION_FILE="$STATE_DIR/version"
@@ -130,6 +137,102 @@ cleanup_old_documents() {
   find "$DOCUMENT_DIR" -maxdepth 1 -name "${DOCUMENT_PREFIX}_*.pdf" ! -name "$(basename "$keep_file")" -delete 2>/dev/null || true
 }
 
+sync_lockscreen_image() {
+  source_path="$1"
+  if [ "$LOCKSCREEN_SYNC" != "1" ]; then
+    return 0
+  fi
+
+  if ! is_png_file "$source_path"; then
+    log "Lockscreen sync skipped. source is not a PNG. path=$source_path header=$(file_header_hex "$source_path")"
+    return 1
+  fi
+
+  if [ "$LOCKSCREEN_DIR" = "/mnt/us/linkss/screensavers" ] && [ ! -d "/mnt/us/linkss" ]; then
+    log "Lockscreen sync notice. /mnt/us/linkss is missing; install or enable the ScreenSavers Hack for this image to appear on lockscreen."
+  fi
+
+  mkdir -p "$LOCKSCREEN_DIR" || {
+    log "Lockscreen sync failed. cannot create directory=$LOCKSCREEN_DIR"
+    return 1
+  }
+
+  failed=0
+  for filename in $LOCKSCREEN_FILENAME $LOCKSCREEN_EXTRA_FILENAMES; do
+    [ -n "$filename" ] || continue
+    target_path="$LOCKSCREEN_DIR/$filename"
+    temp_path="$target_path.tmp"
+    if cp "$source_path" "$temp_path" 2>/dev/null && mv "$temp_path" "$target_path" 2>/dev/null; then
+      log "Lockscreen image synced. path=$target_path"
+    else
+      rm -f "$temp_path" 2>/dev/null || true
+      log "Lockscreen sync failed. target=$target_path"
+      failed=1
+    fi
+  done
+
+  return "$failed"
+}
+
+refresh_linkss_lockscreen() {
+  source_path="$1"
+  if [ "$LOCKSCREEN_REFRESH" != "1" ]; then
+    return 0
+  fi
+
+  if [ ! -d "/mnt/us/linkss" ]; then
+    log "Lockscreen refresh skipped. /mnt/us/linkss is missing."
+    return 0
+  fi
+
+  if ! is_png_file "$source_path"; then
+    log "Lockscreen refresh skipped. source is not a PNG. path=$source_path header=$(file_header_hex "$source_path")"
+    return 1
+  fi
+
+  mkdir -p "$LOCKSCREEN_DIR" || {
+    log "Lockscreen refresh failed. cannot create directory=$LOCKSCREEN_DIR"
+    return 1
+  }
+
+  target_path="$LOCKSCREEN_DIR/$LOCKSCREEN_CANONICAL_FILENAME"
+  if [ "$source_path" != "$target_path" ]; then
+    temp_path="$target_path.tmp"
+    if cp "$source_path" "$temp_path" 2>/dev/null && mv "$temp_path" "$target_path" 2>/dev/null; then
+      log "Lockscreen canonical image updated. path=$target_path"
+    else
+      rm -f "$temp_path" 2>/dev/null || true
+      log "Lockscreen refresh failed. target=$target_path"
+      return 1
+    fi
+  fi
+
+  # PW4/Paperwhite 10th gen uses bg_ss*. Keeping bg_medium files can make
+  # linkss cycle stale images or update the wrong file family.
+  for stale_path in "$LOCKSCREEN_DIR"/bg_medium_ss*.png "$LOCKSCREEN_DIR"/bg_xsmall_ss*.png "$LOCKSCREEN_DIR"/bg_ss[0-9][1-9].png "$LOCKSCREEN_DIR"/bg_ss[1-9][0-9].png; do
+    [ -f "$stale_path" ] && rm -f "$stale_path" 2>/dev/null || true
+  done
+
+  sync
+
+  if [ "$LOCKSCREEN_SHUFFLE" = "1" ] && [ -x "/mnt/us/linkss/bin/shuffless" ]; then
+    if /mnt/us/linkss/bin/shuffless watchdog >> "$LOG_FILE" 2>&1; then
+      log "Lockscreen linkss directory refreshed. path=$target_path"
+    else
+      log "Lockscreen linkss directory refresh returned a non-zero status. path=$target_path"
+    fi
+  fi
+
+  for active_dir in /usr/share/blanket/screensaver /var/local/custom_screensavers; do
+    if [ -d "$active_dir" ]; then
+      cp "$target_path" "$active_dir/$LOCKSCREEN_CANONICAL_FILENAME" 2>/dev/null || true
+    fi
+  done
+
+  sync
+  log "Lockscreen image refreshed. path=$target_path"
+}
+
 display_screen() {
   if ! command -v eips >/dev/null 2>&1; then
     log "Display failed. eips command not found."
@@ -182,6 +285,49 @@ request_pull() {
   else
     log "Startup pull failed. curl_exit=$PULL_CURL_EXIT http_code=$PULL_HTTP_CODE"
   fi
+}
+
+download_screen_image() {
+  image_url="$1"
+  output_path="$2"
+  output_dir="${output_path%/*}"
+
+  if [ "$output_dir" != "$output_path" ]; then
+    mkdir -p "$output_dir" || {
+      log "Screen image download failed. cannot create directory=$output_dir"
+      return 1
+    }
+  fi
+
+  curl \
+    --silent \
+    --show-error \
+    --location \
+    --max-time 30 \
+    --output "$output_path" \
+    --write-out "%{http_code}" \
+    "$image_url" > "$IMAGE_HTTP_FILE"
+
+  IMAGE_CURL_EXIT="$?"
+  IMAGE_HTTP_CODE="$(cat "$IMAGE_HTTP_FILE" 2>/dev/null || echo 000)"
+  IMAGE_HEADER="$(file_header_hex "$output_path")"
+
+  if [ "$IMAGE_CURL_EXIT" != "0" ]; then
+    log "Screen image download failed. curl_exit=$IMAGE_CURL_EXIT http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER image_url=$image_url"
+    return 1
+  fi
+
+  if [ "$IMAGE_HTTP_CODE" != "200" ]; then
+    log "Screen image returned unexpected status. http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER image_url=$image_url"
+    return 1
+  fi
+
+  if ! is_png_file "$output_path"; then
+    log "Screen image is not PNG. http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER path=$output_path"
+    return 1
+  fi
+
+  return 0
 }
 
 backoff_seconds() {
@@ -250,6 +396,18 @@ while true; do
 
   if [ "$TYPE" = "screen.update" ] && [ -n "$NEW_VERSION" ] && [ "$NEW_VERSION" != "$VERSION" ] && [ -n "$IMAGE_URL" ]; then
     log "Screen update received. version=$NEW_VERSION image_url=$IMAGE_URL"
+    PNG_READY=0
+
+    if download_screen_image "$IMAGE_URL" "$SCREEN_PATH"; then
+      PNG_READY=1
+      if [ "$LOCKSCREEN_SYNC" = "1" ]; then
+        sync_lockscreen_image "$SCREEN_PATH" || true
+      fi
+      refresh_linkss_lockscreen "$SCREEN_PATH" || true
+    else
+      log "Pushed PNG could not be downloaded to target path=$SCREEN_PATH"
+    fi
+
     if [ "$OPEN_AS_BOOK" = "1" ] && [ -n "$DOCUMENT_URL" ]; then
       mkdir -p "$DOCUMENT_DIR"
       DOCUMENT_PATH="$DOCUMENT_DIR/${DOCUMENT_PREFIX}_${NEW_VERSION}.pdf"
@@ -282,35 +440,7 @@ while true; do
       fi
     fi
 
-    curl \
-      --silent \
-      --show-error \
-      --location \
-      --max-time 30 \
-      --output "$SCREEN_PATH" \
-      --write-out "%{http_code}" \
-      "$IMAGE_URL" > "$IMAGE_HTTP_FILE"
-
-    IMAGE_CURL_EXIT="$?"
-    IMAGE_HTTP_CODE="$(cat "$IMAGE_HTTP_FILE" 2>/dev/null || echo 000)"
-    IMAGE_HEADER="$(file_header_hex "$SCREEN_PATH")"
-
-    if [ "$IMAGE_CURL_EXIT" != "0" ]; then
-      log "Screen image download failed. curl_exit=$IMAGE_CURL_EXIT http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER image_url=$IMAGE_URL"
-      sleep "$(backoff_seconds "$ERROR_COUNT")"
-      ERROR_COUNT=$((ERROR_COUNT + 1))
-      continue
-    fi
-
-    if [ "$IMAGE_HTTP_CODE" != "200" ]; then
-      log "Screen image returned unexpected status. http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER image_url=$IMAGE_URL"
-      sleep "$(backoff_seconds "$ERROR_COUNT")"
-      ERROR_COUNT=$((ERROR_COUNT + 1))
-      continue
-    fi
-
-    if ! is_png_file "$SCREEN_PATH"; then
-      log "Screen image is not PNG. http_code=$IMAGE_HTTP_CODE header=$IMAGE_HEADER path=$SCREEN_PATH"
+    if [ "$PNG_READY" != "1" ]; then
       sleep "$(backoff_seconds "$ERROR_COUNT")"
       ERROR_COUNT=$((ERROR_COUNT + 1))
       continue
