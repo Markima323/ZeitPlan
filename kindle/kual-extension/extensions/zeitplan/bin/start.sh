@@ -6,10 +6,13 @@ SCRIPT="$APP_DIR/home-kindle-today-plan.sh"
 SCREEN_PATH="$APP_DIR/current.png"
 CONFIG_FILE="$APP_DIR/config.sh"
 TOUCH_SCRIPT="/mnt/us/extensions/zeitplan/bin/touch-buttons.sh"
+WAKE_SCRIPT="/mnt/us/extensions/zeitplan/bin/wake-scheduler.sh"
 PID_FILE="$STATE_DIR/zeitplan.pid"
 TOUCH_PID_FILE="$STATE_DIR/touch.pid"
+WAKE_PID_FILE="$STATE_DIR/wake-scheduler.pid"
 LOG_FILE="$STATE_DIR/kindle.log"
 STOP_FILE="$STATE_DIR/stop"
+WAKE_STOP_FILE="$STATE_DIR/wake-scheduler.stop"
 
 mkdir -p "$STATE_DIR"
 
@@ -95,11 +98,32 @@ ps 2>/dev/null | grep '[t]ouch-buttons.sh' | awk '{print $1}' | while read -r OL
   fi
 done
 
-rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$STOP_FILE"
+if [ -f "$WAKE_PID_FILE" ]; then
+  WAKE_PID="$(cat "$WAKE_PID_FILE" 2>/dev/null || true)"
+  if [ -n "$WAKE_PID" ] && kill -0 "$WAKE_PID" 2>/dev/null; then
+    kill "$WAKE_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Restart requested. stopping existing wake scheduler. pid=$WAKE_PID" >> "$LOG_FILE"
+  fi
+fi
+
+ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r OLD_WAKE_PID; do
+  if [ -n "$OLD_WAKE_PID" ]; then
+    kill "$OLD_WAKE_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped extra ZeitPlan wake scheduler. pid=$OLD_WAKE_PID" >> "$LOG_FILE"
+  fi
+done
+
+rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$WAKE_PID_FILE" "$STOP_FILE" "$WAKE_STOP_FILE"
 
 nohup sh "$SCRIPT" >> "$LOG_FILE" 2>&1 &
 echo "$!" > "$PID_FILE"
 echo "$(date '+%Y-%m-%d %H:%M:%S') Started ZeitPlan client. pid=$!" >> "$LOG_FILE"
+
+if [ "${SCHEDULED_WAKE_ENABLED:-1}" = "1" ] && [ -f "$WAKE_SCRIPT" ]; then
+  nohup sh "$WAKE_SCRIPT" >> "$LOG_FILE" 2>&1 &
+  echo "$!" > "$WAKE_PID_FILE"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') Started ZeitPlan wake scheduler. pid=$!" >> "$LOG_FILE"
+fi
 
 if [ "$OPEN_AS_BOOK" != "1" ] && [ -f "$TOUCH_SCRIPT" ]; then
   nohup sh "$TOUCH_SCRIPT" >> "$LOG_FILE" 2>&1 &

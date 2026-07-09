@@ -12,6 +12,7 @@ STATE_DIR="${STATE_DIR:-/mnt/us/home-kindle-today-plan/state}"
 SCREEN_PATH="${SCREEN_PATH:-/mnt/us/linkss/screensavers/bg_ss00.png}"
 DOCUMENT_DIR="${DOCUMENT_DIR:-/mnt/us/documents}"
 DOCUMENT_PREFIX="${DOCUMENT_PREFIX:-ZeitPlan_Today}"
+DOCUMENT_KEEP_COUNT="${DOCUMENT_KEEP_COUNT:-2}"
 LOCKSCREEN_SYNC="${LOCKSCREEN_SYNC:-0}"
 LOCKSCREEN_DIR="${LOCKSCREEN_DIR:-/mnt/us/linkss/screensavers}"
 LOCKSCREEN_FILENAME="${LOCKSCREEN_FILENAME:-bg_ss00.png}"
@@ -28,6 +29,7 @@ IMAGE_HTTP_FILE="$STATE_DIR/image_http_code"
 PULL_RESPONSE_FILE="$STATE_DIR/pull.json"
 PULL_HTTP_FILE="$STATE_DIR/pull_http_code"
 STOP_FILE="$STATE_DIR/stop"
+LOCKSCREEN_ONLY_FILE="$STATE_DIR/lockscreen-only"
 
 mkdir -p "$STATE_DIR"
 
@@ -134,7 +136,49 @@ open_document() {
 
 cleanup_old_documents() {
   keep_file="$1"
-  find "$DOCUMENT_DIR" -maxdepth 1 -name "${DOCUMENT_PREFIX}_*.pdf" ! -name "$(basename "$keep_file")" -delete 2>/dev/null || true
+  keep_count="$(printf '%s' "$DOCUMENT_KEEP_COUNT" | sed 's/[^0-9]//g')"
+  [ -n "$keep_count" ] || keep_count=2
+  [ "$keep_count" -ge 1 ] 2>/dev/null || keep_count=1
+
+  if [ ! -d "$DOCUMENT_DIR" ]; then
+    return 0
+  fi
+
+  # Kindle Reader creates a .sdr directory for every opened PDF. Keep the
+  # newest ZeitPlan versions and remove both the PDF and its sidecar folder.
+  {
+    for entry in "$DOCUMENT_DIR"/"${DOCUMENT_PREFIX}"_*.pdf "$DOCUMENT_DIR"/"${DOCUMENT_PREFIX}"_*.sdr; do
+      [ -e "$entry" ] || continue
+      name="${entry##*/}"
+      base="${name%.pdf}"
+      base="${base%.sdr}"
+      version="${base#${DOCUMENT_PREFIX}_}"
+      case "$version" in
+        ''|*[!0-9]*) continue ;;
+      esac
+      printf '%s %s\n' "$version" "$base"
+    done
+  } | sort -rn | awk '!seen[$2]++ { print $2 }' | {
+    index=0
+    while read -r base; do
+      [ -n "$base" ] || continue
+      index=$((index + 1))
+      if [ "$index" -le "$keep_count" ]; then
+        continue
+      fi
+
+      pdf_path="$DOCUMENT_DIR/$base.pdf"
+      sdr_path="$DOCUMENT_DIR/$base.sdr"
+      if [ "$pdf_path" != "$keep_file" ] && [ -f "$pdf_path" ]; then
+        rm -f "$pdf_path" 2>/dev/null || true
+        log "Old Kindle document removed. path=$pdf_path"
+      fi
+      if [ -d "$sdr_path" ]; then
+        rm -rf "$sdr_path" 2>/dev/null || true
+        log "Old Kindle document sidecar removed. path=$sdr_path"
+      fi
+    done
+  }
 }
 
 sync_lockscreen_image() {
@@ -397,6 +441,10 @@ while true; do
   if [ "$TYPE" = "screen.update" ] && [ -n "$NEW_VERSION" ] && [ "$NEW_VERSION" != "$VERSION" ] && [ -n "$IMAGE_URL" ]; then
     log "Screen update received. version=$NEW_VERSION image_url=$IMAGE_URL"
     PNG_READY=0
+    LOCKSCREEN_ONLY_UPDATE=0
+    if [ -f "$LOCKSCREEN_ONLY_FILE" ]; then
+      LOCKSCREEN_ONLY_UPDATE=1
+    fi
 
     if download_screen_image "$IMAGE_URL" "$SCREEN_PATH"; then
       PNG_READY=1
@@ -406,6 +454,14 @@ while true; do
       refresh_linkss_lockscreen "$SCREEN_PATH" || true
     else
       log "Pushed PNG could not be downloaded to target path=$SCREEN_PATH"
+    fi
+
+    if [ "$LOCKSCREEN_ONLY_UPDATE" = "1" ] && [ "$PNG_READY" = "1" ]; then
+      VERSION="$NEW_VERSION"
+      echo "$VERSION" > "$VERSION_FILE"
+      ERROR_COUNT=0
+      log "Screen update applied to lockscreen only. version=$VERSION path=$SCREEN_PATH"
+      continue
     fi
 
     if [ "$OPEN_AS_BOOK" = "1" ] && [ -n "$DOCUMENT_URL" ]; then
