@@ -330,8 +330,14 @@ display_screen() {
 }
 
 request_pull() {
-  rm -f "$PULL_RESPONSE_FILE" "$PULL_HTTP_FILE"
-  curl \
+  attempt=1
+  max_attempts="${PULL_RETRIES:-4}"
+  case "$max_attempts" in *[!0-9]*|'') max_attempts=4 ;; esac
+  [ "$max_attempts" -ge 1 ] || max_attempts=1
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    rm -f "$PULL_RESPONSE_FILE" "$PULL_HTTP_FILE"
+    curl \
     --silent \
     --show-error \
     --location \
@@ -344,13 +350,19 @@ request_pull() {
     -H "height: $HEIGHT" \
     "$BASE_URL/api/kindle/pull" > "$PULL_HTTP_FILE"
 
-  PULL_CURL_EXIT="$?"
-  PULL_HTTP_CODE="$(cat "$PULL_HTTP_FILE" 2>/dev/null || echo 000)"
-  if [ "$PULL_CURL_EXIT" = "0" ] && [ "$PULL_HTTP_CODE" = "200" ]; then
-    log "Startup pull requested successfully. width=$WIDTH height=$HEIGHT"
-  else
-    log "Startup pull failed. curl_exit=$PULL_CURL_EXIT http_code=$PULL_HTTP_CODE"
-  fi
+    PULL_CURL_EXIT="$?"
+    PULL_HTTP_CODE="$(cat "$PULL_HTTP_FILE" 2>/dev/null || echo 000)"
+    if [ "$PULL_CURL_EXIT" = "0" ] && [ "$PULL_HTTP_CODE" = "200" ]; then
+      log "Startup pull requested successfully. width=$WIDTH height=$HEIGHT attempt=$attempt"
+      return 0
+    fi
+
+    log "Startup pull failed. curl_exit=$PULL_CURL_EXIT http_code=$PULL_HTTP_CODE attempt=$attempt/$max_attempts"
+    [ "$attempt" -lt "$max_attempts" ] && sleep "$(backoff_seconds "$attempt")"
+    attempt=$((attempt + 1))
+  done
+
+  return 1
 }
 
 download_screen_image() {

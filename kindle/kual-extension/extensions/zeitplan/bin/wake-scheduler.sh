@@ -8,6 +8,8 @@ LOG_FILE="$STATE_DIR/kindle.log"
 VERSION_FILE="$STATE_DIR/version"
 SCHEDULER_PID_FILE="$STATE_DIR/wake-scheduler.pid"
 SCHEDULER_STOP_FILE="$STATE_DIR/wake-scheduler.stop"
+SCHEDULER_LOCK_DIR="$STATE_DIR/wake-scheduler.lock"
+SCHEDULER_EVENT_PIPE="$STATE_DIR/wake-scheduler.events"
 EVENT_FILE="$STATE_DIR/wake-event.json"
 HTTP_FILE="$STATE_DIR/wake-http-code"
 PULL_RESPONSE_FILE="$STATE_DIR/wake-pull.json"
@@ -53,6 +55,36 @@ log() {
 
 cleanup_lockscreen_only_flag() {
   rm -f "$LOCKSCREEN_ONLY_FILE" 2>/dev/null || true
+}
+
+cleanup_scheduler() {
+  cleanup_lockscreen_only_flag
+  if [ -n "${EVENT_LISTENER_PID:-}" ]; then
+    kill "$EVENT_LISTENER_PID" 2>/dev/null || true
+  fi
+  rm -f "$SCHEDULER_EVENT_PIPE" 2>/dev/null || true
+  if [ -f "$SCHEDULER_LOCK_DIR/pid" ] && [ "$(cat "$SCHEDULER_LOCK_DIR/pid" 2>/dev/null)" = "$$" ]; then
+    rm -f "$SCHEDULER_LOCK_DIR/pid" "$SCHEDULER_PID_FILE"
+    rmdir "$SCHEDULER_LOCK_DIR" 2>/dev/null || true
+  fi
+}
+
+acquire_scheduler_lock() {
+  if mkdir "$SCHEDULER_LOCK_DIR" 2>/dev/null; then
+    echo "$$" > "$SCHEDULER_LOCK_DIR/pid"
+    return 0
+  fi
+
+  lock_pid="$(cat "$SCHEDULER_LOCK_DIR/pid" 2>/dev/null || true)"
+  if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
+    log "Wake scheduler already running. pid=$lock_pid; duplicate exiting."
+    return 1
+  fi
+
+  rm -f "$SCHEDULER_LOCK_DIR/pid" 2>/dev/null || true
+  rmdir "$SCHEDULER_LOCK_DIR" 2>/dev/null || true
+  mkdir "$SCHEDULER_LOCK_DIR" 2>/dev/null || return 1
+  echo "$$" > "$SCHEDULER_LOCK_DIR/pid"
 }
 
 set_lockscreen_only_flag() {
@@ -459,6 +491,9 @@ request_sleep_after_update() {
     return 0
   fi
 
+  # powerd may reject rtcWakeup once readyToSuspend has begun. Arm it while the
+  # device is definitely awake, before asking powerd to suspend.
+  set_next_rtc_wakeup
   delay="$(to_number "$SCHEDULED_WAKE_SLEEP_DELAY_SECONDS")"
   sleep "$delay"
   if command -v lipc-set-prop >/dev/null 2>&1; then
@@ -492,7 +527,7 @@ run_wake_update() {
   return "$result"
 }
 
-trap cleanup_lockscreen_only_flag EXIT INT TERM
+trap cleanup_scheduler EXIT INT TERM
 
 handle_power_event() {
   event_line="$1"
@@ -509,6 +544,10 @@ handle_power_event() {
 
 if [ "$SCHEDULED_WAKE_ENABLED" != "1" ]; then
   log "Wake scheduler disabled by config."
+  exit 0
+fi
+
+if ! acquire_scheduler_lock; then
   exit 0
 fi
 
@@ -532,12 +571,26 @@ while true; do
     exit 0
   fi
 
-  lipc-wait-event -m com.lab126.powerd '*' 2>> "$LOG_FILE" | while read -r event_line; do
+  rm -f "$SCHEDULER_EVENT_PIPE" 2>/dev/null || true
+  if ! mkfifo "$SCHEDULER_EVENT_PIPE" 2>/dev/null; then
+    log "Wake scheduler could not create event pipe. retrying."
+    sleep 2
+    continue
+  fi
+
+  lipc-wait-event -m com.lab126.powerd '*' > "$SCHEDULER_EVENT_PIPE" 2>> "$LOG_FILE" &
+  EVENT_LISTENER_PID="$!"
+  while read -r event_line; do
     if [ -f "$SCHEDULER_STOP_FILE" ]; then
       break
     fi
     handle_power_event "$event_line"
-  done
+  done < "$SCHEDULER_EVENT_PIPE"
+
+  kill "$EVENT_LISTENER_PID" 2>/dev/null || true
+  wait "$EVENT_LISTENER_PID" 2>/dev/null || true
+  EVENT_LISTENER_PID=""
+  rm -f "$SCHEDULER_EVENT_PIPE" 2>/dev/null || true
 
   sleep 2
 done

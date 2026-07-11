@@ -17,6 +17,7 @@ DISPLAY_MODE="eips_plain"
 # from falling through to the Home/Library UI under an eips-painted image.
 OPEN_AS_BOOK="1"
 STARTUP_PULL="1"
+PULL_RETRIES="4"
 DOCUMENT_DIR="/mnt/us/documents"
 DOCUMENT_PREFIX="ZeitPlan_Today"
 DOCUMENT_KEEP_COUNT="2"

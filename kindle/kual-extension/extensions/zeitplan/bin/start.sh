@@ -113,6 +113,21 @@ ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r O
   fi
 done
 
+# Give the old scheduler and its event pipeline time to release the singleton
+# lock before launching its replacement.
+OLD_WAKE_WAIT=0
+while [ -d "$STATE_DIR/wake-scheduler.lock" ] && [ "$OLD_WAKE_WAIT" -lt 10 ]; do
+  sleep 1
+  OLD_WAKE_WAIT=$((OLD_WAKE_WAIT + 1))
+done
+if [ -d "$STATE_DIR/wake-scheduler.lock" ]; then
+  OLD_LOCK_PID="$(cat "$STATE_DIR/wake-scheduler.lock/pid" 2>/dev/null || true)"
+  if [ -z "$OLD_LOCK_PID" ] || ! kill -0 "$OLD_LOCK_PID" 2>/dev/null; then
+    rm -f "$STATE_DIR/wake-scheduler.lock/pid" 2>/dev/null || true
+    rmdir "$STATE_DIR/wake-scheduler.lock" 2>/dev/null || true
+  fi
+fi
+
 rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$WAKE_PID_FILE" "$STOP_FILE" "$WAKE_STOP_FILE"
 
 nohup sh "$SCRIPT" >> "$LOG_FILE" 2>&1 &
