@@ -9,7 +9,9 @@ VERSION_FILE="$STATE_DIR/version"
 SCHEDULER_PID_FILE="$STATE_DIR/wake-scheduler.pid"
 SCHEDULER_STOP_FILE="$STATE_DIR/wake-scheduler.stop"
 SCHEDULER_LOCK_DIR="$STATE_DIR/wake-scheduler.lock"
-SCHEDULER_EVENT_PIPE="$STATE_DIR/wake-scheduler.events"
+# /mnt/us is FAT-backed on Kindle and cannot host Unix FIFOs. Keep the
+# persistent lock in STATE_DIR, but create the event pipe on the Linux tmpfs.
+SCHEDULER_EVENT_PIPE="/tmp/zeitplan-wake-scheduler.$$.events"
 EVENT_FILE="$STATE_DIR/wake-event.json"
 HTTP_FILE="$STATE_DIR/wake-http-code"
 PULL_RESPONSE_FILE="$STATE_DIR/wake-pull.json"
