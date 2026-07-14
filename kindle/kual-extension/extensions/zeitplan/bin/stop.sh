@@ -78,5 +78,13 @@ ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r O
   fi
 done
 
+
+ps 2>/dev/null | grep '[l]ipc-wait-event.*com.lab126.powerd' | awk '{print $1}' | while read -r OLD_EVENT_PID; do
+  if [ -n "$OLD_EVENT_PID" ]; then
+    kill "$OLD_EVENT_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped stale power event listener. pid=$OLD_EVENT_PID" >> "$LOG_FILE"
+  fi
+done
+
 rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$WAKE_PID_FILE"
 show_message "Stopped sync" "${PID:+pid=$PID}"

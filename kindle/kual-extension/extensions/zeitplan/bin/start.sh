@@ -113,6 +113,16 @@ ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r O
   fi
 done
 
+# Older scheduler versions used a shell pipeline. Killing only the parent left
+# lipc-wait-event children alive, so every power event was handled repeatedly.
+ps 2>/dev/null | grep '[l]ipc-wait-event.*com.lab126.powerd' | awk '{print $1}' | while read -r OLD_EVENT_PID; do
+  if [ -n "$OLD_EVENT_PID" ]; then
+    kill "$OLD_EVENT_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped stale power event listener. pid=$OLD_EVENT_PID" >> "$LOG_FILE"
+  fi
+done
+sleep 2
+
 # Give the old scheduler and its event pipeline time to release the singleton
 # lock before launching its replacement.
 OLD_WAKE_WAIT=0

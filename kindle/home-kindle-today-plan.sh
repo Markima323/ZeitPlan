@@ -30,6 +30,7 @@ PULL_RESPONSE_FILE="$STATE_DIR/pull.json"
 PULL_HTTP_FILE="$STATE_DIR/pull_http_code"
 STOP_FILE="$STATE_DIR/stop"
 LOCKSCREEN_ONLY_FILE="$STATE_DIR/lockscreen-only"
+WAKE_UPDATE_ACTIVE_FILE="$STATE_DIR/wake-update-active"
 
 mkdir -p "$STATE_DIR"
 
@@ -417,6 +418,19 @@ backoff_seconds() {
   esac
 }
 
+scheduled_wake_update_is_active() {
+  [ -f "$WAKE_UPDATE_ACTIVE_FILE" ] || return 1
+
+  wake_pid="$(cat "$WAKE_UPDATE_ACTIVE_FILE" 2>/dev/null || true)"
+  if [ -n "$wake_pid" ] && kill -0 "$wake_pid" 2>/dev/null; then
+    return 0
+  fi
+
+  log "Stale wake update activity marker removed. path=$WAKE_UPDATE_ACTIVE_FILE pid=${wake_pid:-missing}"
+  rm -f "$WAKE_UPDATE_ACTIVE_FILE" 2>/dev/null || true
+  return 1
+}
+
 ERROR_COUNT=0
 log "ZeitPlan Kindle client started. base_url=$BASE_URL width=$WIDTH height=$HEIGHT version=$VERSION"
 if [ "$STARTUP_PULL" = "1" ]; then
@@ -430,6 +444,12 @@ while true; do
     log "Stop file detected. exiting client."
     rm -f "$STOP_FILE"
     exit 0
+  fi
+
+  if scheduled_wake_update_is_active; then
+    log "Event poll paused while scheduled wake update is active."
+    sleep 2
+    continue
   fi
 
   rm -f "$EVENT_FILE" "$HTTP_FILE" "$IMAGE_HTTP_FILE"
