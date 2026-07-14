@@ -47,6 +47,8 @@ SCHEDULED_WAKE_SLEEP_AFTER_UPDATE="${SCHEDULED_WAKE_SLEEP_AFTER_UPDATE:-1}"
 SCHEDULED_WAKE_SLEEP_DELAY_SECONDS="${SCHEDULED_WAKE_SLEEP_DELAY_SECONDS:-8}"
 LOCKSCREEN_ONLY_TTL_SECONDS="${LOCKSCREEN_ONLY_TTL_SECONDS:-300}"
 SCHEDULED_WAKE_PREVENT_SUSPEND="${SCHEDULED_WAKE_PREVENT_SUSPEND:-1}"
+RTC_WAKE_ARMED=0
+RTC_WAKE_ARMED_SECONDS=""
 
 if [ -f "$CONFIG_FILE" ]; then
   # shellcheck disable=SC1090
@@ -265,9 +267,16 @@ next_wake_seconds() {
 }
 
 set_next_rtc_wakeup() {
+  if [ "$RTC_WAKE_ARMED" = "1" ]; then
+    log "Scheduled RTC wakeup unchanged. pid=$$ already_armed=1 seconds=$RTC_WAKE_ARMED_SECONDS"
+    return 0
+  fi
+
   seconds="$(next_wake_seconds)"
   if command -v lipc-set-prop >/dev/null 2>&1; then
     if lipc-set-prop -i com.lab126.powerd rtcWakeup "$seconds" >> "$LOG_FILE" 2>&1; then
+      RTC_WAKE_ARMED=1
+      RTC_WAKE_ARMED_SECONDS="$seconds"
       log "Scheduled RTC wakeup. pid=$$ seconds=$seconds minutes=$SCHEDULED_WAKE_MINUTES window=$SCHEDULED_WAKE_START_HOUR-$SCHEDULED_WAKE_END_HOUR"
     else
       log "Scheduled RTC wakeup failed. pid=$$ seconds=$seconds"
@@ -554,11 +563,21 @@ poll_and_apply_update() {
     fi
 
     log "Wake step poll_and_apply_update poll failed. curl_exit=$event_curl_exit http_code=$event_http_code since=$version attempt=$attempt/$max_attempts"
-    log "Wake step poll_and_apply_update reconnect started. attempt=$attempt/$max_attempts"
-    reconnect_wifi_stage "$attempt"
-    retry_delay="$(to_number "$SCHEDULED_WAKE_RETRY_DELAY_SECONDS")"
-    log "Wake step poll_and_apply_update reconnect completed. waiting_before_retry=${retry_delay}s attempt=$attempt/$max_attempts"
-    sleep "$retry_delay"
+    if [ "$attempt" -lt "$max_attempts" ]; then
+      log "Wake step poll_and_apply_update reconnect started. attempt=$attempt/$max_attempts"
+      reconnect_wifi_stage "$attempt"
+      log "Wake step poll_and_apply_update waiting for Wi-Fi recovery. attempt=$attempt/$max_attempts"
+      if wait_for_wifi; then
+        log "Wake step poll_and_apply_update Wi-Fi recovery succeeded. attempt=$attempt/$max_attempts"
+      else
+        log "Wake step poll_and_apply_update Wi-Fi recovery failed. attempt=$attempt/$max_attempts"
+      fi
+      retry_delay="$(to_number "$SCHEDULED_WAKE_RETRY_DELAY_SECONDS")"
+      log "Wake step poll_and_apply_update reconnect completed. waiting_before_retry=${retry_delay}s attempt=$attempt/$max_attempts"
+      sleep "$retry_delay"
+    else
+      log "Wake step poll_and_apply_update no retry remains. attempt=$attempt/$max_attempts"
+    fi
     attempt=$((attempt + 1))
   done
 
@@ -717,6 +736,9 @@ handle_power_event() {
       set_next_rtc_wakeup
       ;;
     *wakeupFromSuspend*)
+      RTC_WAKE_ARMED=0
+      RTC_WAKE_ARMED_SECONDS=""
+      log "Scheduled RTC wakeup latch cleared after wake. pid=$$"
       log "Wake scheduler woke from suspend. pid=$$ event=$event_line"
       run_wake_update || true
       ;;
