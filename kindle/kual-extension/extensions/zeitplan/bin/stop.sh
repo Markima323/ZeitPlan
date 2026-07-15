@@ -4,13 +4,16 @@ STATE_DIR="/mnt/us/home-kindle-today-plan/state"
 PID_FILE="$STATE_DIR/zeitplan.pid"
 TOUCH_PID_FILE="$STATE_DIR/touch.pid"
 WAKE_PID_FILE="$STATE_DIR/wake-scheduler.pid"
+ALWAYS_ON_PULL_PID_FILE="$STATE_DIR/always-on-pull-scheduler.pid"
 LOG_FILE="$STATE_DIR/kindle.log"
 STOP_FILE="$STATE_DIR/stop"
 WAKE_STOP_FILE="$STATE_DIR/wake-scheduler.stop"
+ALWAYS_ON_PULL_STOP_FILE="$STATE_DIR/always-on-pull-scheduler.stop"
 
 mkdir -p "$STATE_DIR"
 touch "$STOP_FILE"
 touch "$WAKE_STOP_FILE"
+touch "$ALWAYS_ON_PULL_STOP_FILE"
 
 show_message() {
   if [ "${QUIET:-0}" = "1" ]; then
@@ -78,6 +81,30 @@ ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r O
   fi
 done
 
+if [ -f "$ALWAYS_ON_PULL_PID_FILE" ]; then
+  ALWAYS_ON_PULL_PID="$(cat "$ALWAYS_ON_PULL_PID_FILE" 2>/dev/null || true)"
+  if [ -n "$ALWAYS_ON_PULL_PID" ] && kill -0 "$ALWAYS_ON_PULL_PID" 2>/dev/null; then
+    kill "$ALWAYS_ON_PULL_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped always-on pull scheduler. pid=$ALWAYS_ON_PULL_PID" >> "$LOG_FILE"
+  fi
+fi
+
+ps 2>/dev/null | grep '[a]lways-on-pull-scheduler.sh' | awk '{print $1}' | while read -r OLD_PULL_PID; do
+  if [ -n "$OLD_PULL_PID" ]; then
+    kill "$OLD_PULL_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped extra always-on pull scheduler. pid=$OLD_PULL_PID" >> "$LOG_FILE"
+  fi
+done
+
+
+sleep 1
+ps 2>/dev/null | grep '[a]lways-on-pull-scheduler.sh' | awk '{print $1}' | while read -r OLD_PULL_PID; do
+  if [ -n "$OLD_PULL_PID" ]; then
+    kill -9 "$OLD_PULL_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Force-stopped stale always-on pull scheduler. pid=$OLD_PULL_PID" >> "$LOG_FILE"
+  fi
+done
+
 
 sleep 1
 ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r OLD_WAKE_PID; do
@@ -95,5 +122,5 @@ ps 2>/dev/null | grep '[l]ipc-wait-event.*com.lab126.powerd' | awk '{print $1}' 
   fi
 done
 
-rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$WAKE_PID_FILE"
+rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$WAKE_PID_FILE" "$ALWAYS_ON_PULL_PID_FILE"
 show_message "Stopped sync" "${PID:+pid=$PID}"

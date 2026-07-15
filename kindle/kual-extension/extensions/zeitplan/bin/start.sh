@@ -7,12 +7,15 @@ SCREEN_PATH="$APP_DIR/current.png"
 CONFIG_FILE="$APP_DIR/config.sh"
 TOUCH_SCRIPT="/mnt/us/extensions/zeitplan/bin/touch-buttons.sh"
 WAKE_SCRIPT="/mnt/us/extensions/zeitplan/bin/wake-scheduler.sh"
+ALWAYS_ON_PULL_SCRIPT="/mnt/us/extensions/zeitplan/bin/always-on-pull-scheduler.sh"
 PID_FILE="$STATE_DIR/zeitplan.pid"
 TOUCH_PID_FILE="$STATE_DIR/touch.pid"
 WAKE_PID_FILE="$STATE_DIR/wake-scheduler.pid"
+ALWAYS_ON_PULL_PID_FILE="$STATE_DIR/always-on-pull-scheduler.pid"
 LOG_FILE="$STATE_DIR/kindle.log"
 STOP_FILE="$STATE_DIR/stop"
 WAKE_STOP_FILE="$STATE_DIR/wake-scheduler.stop"
+ALWAYS_ON_PULL_STOP_FILE="$STATE_DIR/always-on-pull-scheduler.stop"
 
 mkdir -p "$STATE_DIR"
 
@@ -113,6 +116,29 @@ ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r O
   fi
 done
 
+if [ -f "$ALWAYS_ON_PULL_PID_FILE" ]; then
+  ALWAYS_ON_PULL_PID="$(cat "$ALWAYS_ON_PULL_PID_FILE" 2>/dev/null || true)"
+  if [ -n "$ALWAYS_ON_PULL_PID" ] && kill -0 "$ALWAYS_ON_PULL_PID" 2>/dev/null; then
+    kill "$ALWAYS_ON_PULL_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Restart requested. stopping existing always-on pull scheduler. pid=$ALWAYS_ON_PULL_PID" >> "$LOG_FILE"
+  fi
+fi
+
+ps 2>/dev/null | grep '[a]lways-on-pull-scheduler.sh' | awk '{print $1}' | while read -r OLD_PULL_PID; do
+  if [ -n "$OLD_PULL_PID" ]; then
+    kill "$OLD_PULL_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Stopped extra always-on pull scheduler. pid=$OLD_PULL_PID" >> "$LOG_FILE"
+  fi
+done
+
+sleep 1
+ps 2>/dev/null | grep '[a]lways-on-pull-scheduler.sh' | awk '{print $1}' | while read -r OLD_PULL_PID; do
+  if [ -n "$OLD_PULL_PID" ]; then
+    kill -9 "$OLD_PULL_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Force-stopped stale always-on pull scheduler. pid=$OLD_PULL_PID" >> "$LOG_FILE"
+  fi
+done
+
 # Old scheduler builds trapped TERM for cleanup but continued running. Ensure
 # no stale scheduler survives before always-on mode starts.
 sleep 1
@@ -148,7 +174,7 @@ if [ -d "$STATE_DIR/wake-scheduler.lock" ]; then
   fi
 fi
 
-rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$WAKE_PID_FILE" "$STOP_FILE" "$WAKE_STOP_FILE"
+rm -f "$PID_FILE" "$TOUCH_PID_FILE" "$WAKE_PID_FILE" "$ALWAYS_ON_PULL_PID_FILE" "$STOP_FILE" "$WAKE_STOP_FILE" "$ALWAYS_ON_PULL_STOP_FILE"
 
 nohup sh "$SCRIPT" >> "$LOG_FILE" 2>&1 &
 echo "$!" > "$PID_FILE"
@@ -158,6 +184,12 @@ if [ "${SCHEDULED_WAKE_ENABLED:-1}" = "1" ] && [ -f "$WAKE_SCRIPT" ]; then
   nohup sh "$WAKE_SCRIPT" >> "$LOG_FILE" 2>&1 &
   echo "$!" > "$WAKE_PID_FILE"
   echo "$(date '+%Y-%m-%d %H:%M:%S') Started ZeitPlan wake scheduler. pid=$!" >> "$LOG_FILE"
+fi
+
+if [ "${ALWAYS_ON_ENABLED:-0}" = "1" ] && [ "${ALWAYS_ON_PULL_ENABLED:-1}" = "1" ] && [ -f "$ALWAYS_ON_PULL_SCRIPT" ]; then
+  nohup sh "$ALWAYS_ON_PULL_SCRIPT" >> "$LOG_FILE" 2>&1 &
+  echo "$!" > "$ALWAYS_ON_PULL_PID_FILE"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') Started always-on pull scheduler. pid=$!" >> "$LOG_FILE"
 fi
 
 if [ "$OPEN_AS_BOOK" != "1" ] && [ -f "$TOUCH_SCRIPT" ]; then

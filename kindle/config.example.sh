@@ -20,6 +20,13 @@ STARTUP_PULL="1"
 PULL_RETRIES="4"
 ALWAYS_ON_ENABLED="1"
 ALWAYS_ON_WIFI_WAIT_SECONDS="120"
+# While the Kindle remains awake, request a fresh screen at these fixed times.
+# This scheduler never sets RTC wakeups and never asks the Kindle to sleep.
+ALWAYS_ON_PULL_ENABLED="1"
+ALWAYS_ON_PULL_START_HOUR="6"
+ALWAYS_ON_PULL_END_HOUR="0"
+ALWAYS_ON_PULL_MINUTES="1 6 31 36"
+ALWAYS_ON_PULL_RETRIES="4"
 DOCUMENT_DIR="/mnt/us/documents"
 DOCUMENT_PREFIX="ZeitPlan_Today"
 DOCUMENT_KEEP_COUNT="2"
@@ -36,8 +43,7 @@ LOCKSCREEN_SHUFFLE="1"
 
 # Keep scheduled wake disabled in always-on mode. The remaining values are kept
 # here so the RTC mode can be restored later if needed.
-# With this config, updates run at every :01, :06, :31 and :36 from 06:00
-# through 23:59. The next wake after 23:36 is 06:01 the next morning.
+# These RTC settings are inactive while SCHEDULED_WAKE_ENABLED is 0.
 SCHEDULED_WAKE_ENABLED="0"
 SCHEDULED_WAKE_START_HOUR="6"
 SCHEDULED_WAKE_END_HOUR="0"
