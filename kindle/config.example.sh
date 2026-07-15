@@ -18,6 +18,8 @@ DISPLAY_MODE="eips_plain"
 OPEN_AS_BOOK="1"
 STARTUP_PULL="1"
 PULL_RETRIES="4"
+ALWAYS_ON_ENABLED="1"
+ALWAYS_ON_WIFI_WAIT_SECONDS="120"
 DOCUMENT_DIR="/mnt/us/documents"
 DOCUMENT_PREFIX="ZeitPlan_Today"
 DOCUMENT_KEEP_COUNT="2"
@@ -32,10 +34,11 @@ LOCKSCREEN_REFRESH="1"
 LOCKSCREEN_CANONICAL_FILENAME="bg_ss00.png"
 LOCKSCREEN_SHUFFLE="1"
 
-# Wake from suspend and refresh the lockscreen during the active window.
+# Keep scheduled wake disabled in always-on mode. The remaining values are kept
+# here so the RTC mode can be restored later if needed.
 # With this config, updates run at every :01, :06, :31 and :36 from 06:00
 # through 23:59. The next wake after 23:36 is 06:01 the next morning.
-SCHEDULED_WAKE_ENABLED="1"
+SCHEDULED_WAKE_ENABLED="0"
 SCHEDULED_WAKE_START_HOUR="6"
 SCHEDULED_WAKE_END_HOUR="0"
 SCHEDULED_WAKE_MINUTES="1 6 31 36"

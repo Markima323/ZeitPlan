@@ -6,6 +6,8 @@ HEIGHT="${HEIGHT:-800}"
 AUTO_DETECT_SCREEN_SIZE="${AUTO_DETECT_SCREEN_SIZE:-1}"
 DISPLAY_MODE="${DISPLAY_MODE:-eips_plain}"
 STARTUP_PULL="${STARTUP_PULL:-0}"
+ALWAYS_ON_ENABLED="${ALWAYS_ON_ENABLED:-0}"
+ALWAYS_ON_WIFI_WAIT_SECONDS="${ALWAYS_ON_WIFI_WAIT_SECONDS:-120}"
 DISPLAY_CLEAR_DELAY="${DISPLAY_CLEAR_DELAY:-1}"
 OPEN_AS_BOOK="${OPEN_AS_BOOK:-1}"
 STATE_DIR="${STATE_DIR:-/mnt/us/home-kindle-today-plan/state}"
@@ -45,6 +47,97 @@ fi
 log() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
 }
+
+release_always_on() {
+  if [ "${ALWAYS_ON_ACTIVE:-0}" != "1" ]; then
+    return 0
+  fi
+
+  if lipc-set-prop com.lab126.powerd preventScreenSaver 0 >/dev/null 2>&1; then
+    ALWAYS_ON_ACTIVE=0
+    log "Always-on mode released. property=preventScreenSaver value=0"
+    return 0
+  fi
+
+  log "Always-on mode release failed. property=preventScreenSaver value=0"
+  return 1
+}
+
+cleanup_client() {
+  release_always_on || true
+}
+
+handle_client_signal() {
+  log "ZeitPlan Kindle client received termination signal."
+  exit 0
+}
+
+enable_always_on() {
+  if [ "$ALWAYS_ON_ENABLED" != "1" ]; then
+    log "Always-on mode disabled by configuration."
+    return 0
+  fi
+
+  if ! command -v lipc-set-prop >/dev/null 2>&1; then
+    log "Always-on mode failed. lipc-set-prop command not found."
+    return 1
+  fi
+
+  if lipc-set-prop com.lab126.powerd preventScreenSaver 1 >/dev/null 2>&1; then
+    ALWAYS_ON_ACTIVE=1
+    log "Always-on mode enabled. property=preventScreenSaver value=1"
+    return 0
+  fi
+
+  log "Always-on mode failed. property=preventScreenSaver value=1"
+  return 1
+}
+
+recover_always_on_wifi() {
+  if [ "$ALWAYS_ON_ENABLED" != "1" ]; then
+    return 0
+  fi
+
+  log "Always-on Wi-Fi recovery started. timeout_seconds=$ALWAYS_ON_WIFI_WAIT_SECONDS"
+  lipc-set-prop com.lab126.wifid enable 1 >/dev/null 2>&1 || true
+  lipc-set-prop com.lab126.cmd wirelessEnable 1 >/dev/null 2>&1 || true
+  if command -v wpa_cli >/dev/null 2>&1; then
+    wpa_cli reassociate >/dev/null 2>&1 || true
+  fi
+
+  elapsed=0
+  limit="$(printf '%s' "$ALWAYS_ON_WIFI_WAIT_SECONDS" | sed 's/[^0-9].*//')"
+  [ -n "$limit" ] || limit=120
+  while [ "$elapsed" -lt "$limit" ]; do
+    state="$(lipc-get-prop com.lab126.wifid cmState 2>/dev/null || true)"
+    case "$state" in
+      *CONNECTED*)
+        log "Always-on Wi-Fi recovery succeeded. elapsed=$elapsed state=$state"
+        return 0
+        ;;
+    esac
+
+    if [ "$elapsed" -eq 10 ] && command -v wpa_cli >/dev/null 2>&1; then
+      wpa_cli disconnect >/dev/null 2>&1 || true
+      sleep 1
+      wpa_cli reconnect >/dev/null 2>&1 || true
+    elif [ "$elapsed" -eq 30 ] || [ "$elapsed" -eq 60 ]; then
+      lipc-set-prop com.lab126.wifid enable 0 >/dev/null 2>&1 || true
+      sleep 2
+      lipc-set-prop com.lab126.wifid enable 1 >/dev/null 2>&1 || true
+      lipc-set-prop com.lab126.cmd wirelessEnable 1 >/dev/null 2>&1 || true
+    fi
+
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  log "Always-on Wi-Fi recovery failed. timed out after ${limit}s state=${state:-unknown}"
+  return 1
+}
+
+trap cleanup_client EXIT
+trap handle_client_signal INT TERM
 
 apply_screen_size() {
   set -- $(printf '%s\n' "$1" | sed 's/[^0-9]/ /g')
@@ -433,6 +526,8 @@ scheduled_wake_update_is_active() {
 
 ERROR_COUNT=0
 log "ZeitPlan Kindle client started. base_url=$BASE_URL width=$WIDTH height=$HEIGHT version=$VERSION"
+enable_always_on || true
+recover_always_on_wifi || true
 if [ "$STARTUP_PULL" = "1" ]; then
   request_pull
 else
@@ -470,6 +565,7 @@ while true; do
 
   if [ "$CURL_EXIT" != "0" ]; then
     log "Event poll failed. curl_exit=$CURL_EXIT http_code=$HTTP_CODE"
+    recover_always_on_wifi || true
     sleep "$(backoff_seconds "$ERROR_COUNT")"
     ERROR_COUNT=$((ERROR_COUNT + 1))
     continue

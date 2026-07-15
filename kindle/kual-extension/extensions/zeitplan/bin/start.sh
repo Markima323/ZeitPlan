@@ -113,6 +113,16 @@ ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r O
   fi
 done
 
+# Old scheduler builds trapped TERM for cleanup but continued running. Ensure
+# no stale scheduler survives before always-on mode starts.
+sleep 1
+ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r OLD_WAKE_PID; do
+  if [ -n "$OLD_WAKE_PID" ]; then
+    kill -9 "$OLD_WAKE_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Force-stopped stale ZeitPlan wake scheduler. pid=$OLD_WAKE_PID" >> "$LOG_FILE"
+  fi
+done
+
 # Older scheduler versions used a shell pipeline. Killing only the parent left
 # lipc-wait-event children alive, so every power event was handled repeatedly.
 ps 2>/dev/null | grep '[l]ipc-wait-event.*com.lab126.powerd' | awk '{print $1}' | while read -r OLD_EVENT_PID; do

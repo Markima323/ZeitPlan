@@ -727,7 +727,8 @@ run_wake_update() {
   return "$result"
 }
 
-trap cleanup_scheduler EXIT INT TERM
+trap cleanup_scheduler EXIT
+trap 'exit 0' INT TERM
 
 handle_power_event() {
   event_line="$1"

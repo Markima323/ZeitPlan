@@ -79,6 +79,15 @@ ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r O
 done
 
 
+sleep 1
+ps 2>/dev/null | grep '[w]ake-scheduler.sh' | awk '{print $1}' | while read -r OLD_WAKE_PID; do
+  if [ -n "$OLD_WAKE_PID" ]; then
+    kill -9 "$OLD_WAKE_PID" 2>/dev/null || true
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Force-stopped stale ZeitPlan wake scheduler. pid=$OLD_WAKE_PID" >> "$LOG_FILE"
+  fi
+done
+
+
 ps 2>/dev/null | grep '[l]ipc-wait-event.*com.lab126.powerd' | awk '{print $1}' | while read -r OLD_EVENT_PID; do
   if [ -n "$OLD_EVENT_PID" ]; then
     kill "$OLD_EVENT_PID" 2>/dev/null || true
