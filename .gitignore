@@ -4,5 +4,6 @@ frontend/.vite/
 backend/target/
 .env
 certbot/
+infra/nginx/.htpasswd
 postgres-data/
 claude.md

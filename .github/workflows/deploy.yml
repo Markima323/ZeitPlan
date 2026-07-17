@@ -35,5 +35,7 @@ jobs:
           script: |
             cd ${{ secrets.HETZNER_DEPLOY_PATH }}
             git pull --ff-only
+            test -f infra/nginx/.htpasswd || (echo "Missing infra/nginx/.htpasswd" && exit 1)
+            docker network inspect public-proxy >/dev/null 2>&1 || docker network create public-proxy
             docker compose --env-file .env -f docker-compose.prod.yml up -d --build
             docker image prune -f

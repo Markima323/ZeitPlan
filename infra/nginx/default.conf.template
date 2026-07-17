@@ -1,6 +1,8 @@
+limit_req_zone $binary_remote_addr zone=resume_api:10m rate=30r/m;
+
 server {
     listen 80;
-    server_name ${SERVER_NAME};
+    server_name ${SERVER_NAME} ${RESUME_SERVER_NAME};
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -8,6 +10,56 @@ server {
 
     location / {
         return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${RESUME_SERVER_NAME};
+
+    # Both hostnames are stored in the existing ZeitPlan certificate lineage.
+    ssl_certificate /etc/letsencrypt/live/${SERVER_NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${SERVER_NAME}/privkey.pem;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:ResumeSSL:10m;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_tickets off;
+
+    auth_basic "Lebenslauf";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    client_max_body_size 1m;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $resume_backend_upstream http://resume-backend:8080;
+    set $resume_frontend_upstream http://resume-frontend:80;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" always;
+
+    location /api/ {
+        limit_req zone=resume_api burst=20 nodelay;
+        proxy_pass $resume_backend_upstream;
+        proxy_http_version 1.1;
+        proxy_read_timeout 90s;
+        proxy_send_timeout 90s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location / {
+        proxy_pass $resume_frontend_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
     }
 }
 
