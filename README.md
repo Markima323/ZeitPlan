@@ -6,7 +6,7 @@ The production Nginx also serves `lebenslauf.markima.de` for the CreateResume pr
 
 See the CreateResume deployment guide at `docs/服务器部署.md` in the CreateResume repository for DNS, certificate expansion, Basic Auth and deployment order.
 
-一个围绕德国本地时间与北京时间联动的日程管理项目。它把一天拆成可插入、可删除的任务块，自动在任务之间插入 5 分钟休息，并提供任务类型管理、后台统计、图片复制和奖励骰子功能。
+一个围绕德国本地时间与北京时间联动的日程管理项目。它把一天拆成可插入、可删除的任务块，自动在任务之间插入 5 分钟休息，并提供任务类型管理、后台统计、图片复制和奖励骰子功能。并且支持转发。
 
 ## 技术栈
 
