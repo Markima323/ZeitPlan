@@ -33,6 +33,10 @@ services:
       - db
     expose:
       - "8282"
+    networks:
+      default:
+        aliases:
+          - zeitplan-backend
 
   frontend:
     build:
@@ -40,6 +44,10 @@ services:
     restart: unless-stopped
     expose:
       - "80"
+    networks:
+      default:
+        aliases:
+          - zeitplan-frontend
 
   nginx:
     image: nginx:1.27-alpine

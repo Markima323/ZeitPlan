@@ -77,8 +77,8 @@ server {
 
     client_max_body_size 10m;
     resolver 127.0.0.11 valid=30s ipv6=off;
-    set $backend_upstream http://backend:8282;
-    set $frontend_upstream http://frontend:80;
+    set $backend_upstream http://zeitplan-backend:8282;
+    set $frontend_upstream http://zeitplan-frontend:80;
 
     location = /api/kindle/events {
         proxy_pass $backend_upstream;
