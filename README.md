@@ -2,7 +2,7 @@
 
 ## Shared production gateway
 
-The production Nginx also serves `lebenslauf.markima.de` for the CreateResume project on the same Hetzner server. Both Compose projects join the external Docker network `public-proxy`; CreateResume is reachable through the network aliases `resume-frontend` and `resume-backend`. The Lebenslauf virtual host is protected by `infra/nginx/.htpasswd`, which must exist only on the server and is intentionally ignored by Git.
+The production Nginx also serves `lebenslauf.markima.de` for CreateResume and `chat.markima.de` for SillyTavern on the same Hetzner server. All Compose projects join the external Docker network `public-proxy`; CreateResume is reachable through `resume-frontend` / `resume-backend`, and SillyTavern through `sillytavern`. The Lebenslauf virtual host is protected by `infra/nginx/.htpasswd`, which must exist only on the server and is intentionally ignored by Git. SillyTavern uses its own Basic Auth configured in its server-side `.env`.
 
 See the CreateResume deployment guide at `docs/服务器部署.md` in the CreateResume repository for DNS, certificate expansion, Basic Auth and deployment order.
 
