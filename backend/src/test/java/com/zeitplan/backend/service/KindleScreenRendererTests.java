@@ -19,6 +19,7 @@ class KindleScreenRendererTests {
         KindleTodaySnapshot snapshot = new KindleTodaySnapshot(
                 LocalDate.of(2026, 7, 8),
                 "task-1",
+                false,
                 "方法整理",
                 "深度工作",
                 LocalTime.of(16, 5),
@@ -41,6 +42,7 @@ class KindleScreenRendererTests {
         KindleTodaySnapshot snapshot = new KindleTodaySnapshot(
                 LocalDate.of(2026, 7, 8),
                 "task-1",
+                false,
                 "Kindle \u9875\u9762\u6d4b\u8bd5",
                 "\u6df1\u5ea6\u5de5\u4f5c",
                 LocalTime.of(16, 5),

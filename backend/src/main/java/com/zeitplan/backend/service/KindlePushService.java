@@ -355,7 +355,7 @@ public class KindlePushService {
             screen.setOwnerUserId(device.getOwnerUserId());
             screen.setSourceType(SOURCE_TYPE_TODAY_CURRENT);
             screen.setSourceRef(snapshot.sourceRef());
-            screen.setTitle(snapshot.hasCurrentItem() ? snapshot.title() : "暂无进行中的任务");
+            screen.setTitle(!snapshot.hasCurrentItem() ? "暂无进行中的任务" : snapshot.onBreak() ? "休息 · 下一项：" + snapshot.title() : snapshot.title());
             screen.setVersion(version);
             screen.setImagePath("database:" + screenId);
             screen.setImageBytes(imageBytes);

@@ -70,17 +70,13 @@ public class KindleTodaySnapshotService {
             int taskStart = cursor + breakMinutesBefore;
             int taskEnd = cursor + Math.max(BREAK_MINUTES * 2, task.getDurationMinutes());
 
+            if (nowMinutes >= cursor && nowMinutes < taskStart) {
+                // During the automatic break, show the upcoming task instead of an empty screen.
+                return taskSnapshot(plan, tasks, index, true, taskStart, taskEnd);
+            }
+
             if (nowMinutes >= taskStart && nowMinutes < taskEnd) {
-                return new KindleTodaySnapshot(
-                        plan.getPlanDate(),
-                        task.getId() == null ? "order-" + task.getOrderIndex() : task.getId().toString(),
-                        task.getTitle(),
-                        task.getTaskType() == null ? "未分类" : task.getTaskType().getName(),
-                        toClock(taskStart),
-                        toClock(taskEnd),
-                        resolveNextTitle(tasks, index),
-                        OffsetDateTime.now(clock.withZone(zoneId))
-                );
+                return taskSnapshot(plan, tasks, index, false, taskStart, taskEnd);
             }
 
             cursor = taskEnd;
@@ -89,10 +85,34 @@ public class KindleTodaySnapshotService {
         return emptySnapshot(plan.getPlanDate());
     }
 
+    private KindleTodaySnapshot taskSnapshot(
+            DailyPlanEntity plan,
+            List<PlanTaskEntity> tasks,
+            int index,
+            boolean onBreak,
+            int taskStart,
+            int taskEnd
+    ) {
+        PlanTaskEntity task = tasks.get(index);
+        String itemId = task.getId() == null ? "order-" + task.getOrderIndex() : task.getId().toString();
+        return new KindleTodaySnapshot(
+                plan.getPlanDate(),
+                onBreak ? "break-" + itemId : itemId,
+                onBreak,
+                task.getTitle(),
+                task.getTaskType() == null ? "未分类" : task.getTaskType().getName(),
+                toClock(taskStart),
+                toClock(taskEnd),
+                resolveNextTitle(tasks, index),
+                OffsetDateTime.now(clock.withZone(zoneId))
+        );
+    }
+
     private KindleTodaySnapshot emptySnapshot(LocalDate planDate) {
         return new KindleTodaySnapshot(
                 planDate,
                 null,
+                false,
                 null,
                 null,
                 null,

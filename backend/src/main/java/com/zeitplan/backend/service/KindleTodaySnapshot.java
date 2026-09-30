@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 public record KindleTodaySnapshot(
         LocalDate planDate,
         String currentItemId,
+        boolean onBreak,
         String title,
         String taskTypeName,
         LocalTime startTime,
@@ -23,6 +24,7 @@ public record KindleTodaySnapshot(
         return String.join("|",
                 planDate.toString(),
                 currentItemId == null ? "empty" : currentItemId,
+                onBreak ? "break" : "task",
                 title == null ? "" : title,
                 taskTypeName == null ? "" : taskTypeName,
                 startTime == null ? "" : startTime.toString(),

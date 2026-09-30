@@ -97,6 +97,10 @@ while true; do
     continue
   fi
 
+  if [ "$ALWAYS_ON_ENABLED" = "1" ]; then
+    lipc-set-prop com.lab126.powerd preventScreenSaver 1 >/dev/null 2>&1 || true
+  fi
+
   rm -f "$EVENT_FILE" "$HTTP_FILE" "$IMAGE_HTTP_FILE"
   curl \
     --silent \
@@ -144,6 +148,8 @@ while true; do
     LOCKSCREEN_ONLY_UPDATE=0
     if is_lockscreen_only_update; then
       LOCKSCREEN_ONLY_UPDATE=1
+    else
+      ensure_always_on_awake || true
     fi
 
     if download_screen_image "$IMAGE_URL" "$SCREEN_PATH"; then

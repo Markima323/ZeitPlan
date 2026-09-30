@@ -49,6 +49,51 @@ enable_always_on() {
   return 1
 }
 
+is_screensaver_state() {
+  case "$1" in
+    *[Ss]creen[Ss]aver*|*[Ss]uspend*) return 0 ;;
+  esac
+  return 1
+}
+
+# The framework can drop preventScreenSaver without restarting this client
+# (e.g. after the zh-Hans font pack install on 2026-09-23). Re-assert it on
+# every loop and wake the device before opening a new screen, otherwise the
+# reader updates behind the screensaver until the power button is pressed.
+ensure_always_on_awake() {
+  if [ "$ALWAYS_ON_ENABLED" != "1" ] || ! command -v lipc-set-prop >/dev/null 2>&1; then
+    return 0
+  fi
+
+  lipc-set-prop com.lab126.powerd preventScreenSaver 1 >/dev/null 2>&1 || true
+  ALWAYS_ON_ACTIVE=1
+
+  power_state="$(lipc-get-prop com.lab126.powerd state 2>/dev/null || true)"
+  if ! is_screensaver_state "$power_state"; then
+    return 0
+  fi
+
+  log "Always-on detected screensaver. waking device. state=$power_state"
+  lipc-set-prop com.lab126.powerd wakeUp 1 >/dev/null 2>&1 || true
+  sleep 2
+  power_state="$(lipc-get-prop com.lab126.powerd state 2>/dev/null || true)"
+  if is_screensaver_state "$power_state"; then
+    # powerButton toggles, so only press it while still in screensaver.
+    lipc-set-prop com.lab126.powerd powerButton 1 >/dev/null 2>&1 || true
+    sleep 2
+    power_state="$(lipc-get-prop com.lab126.powerd state 2>/dev/null || true)"
+  fi
+
+  lipc-set-prop com.lab126.powerd preventScreenSaver 1 >/dev/null 2>&1 || true
+  if is_screensaver_state "$power_state"; then
+    log "Always-on wake failed. state=$power_state"
+    return 1
+  fi
+
+  log "Always-on wake succeeded. state=$power_state"
+  return 0
+}
+
 recover_always_on_wifi() {
   if [ "$ALWAYS_ON_ENABLED" != "1" ]; then
     return 0

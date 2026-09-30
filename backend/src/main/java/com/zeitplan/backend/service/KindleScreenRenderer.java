@@ -61,7 +61,10 @@ public class KindleScreenRenderer {
             cursorY += Math.max(52, height / 24);
 
             if (snapshot.hasCurrentItem()) {
-                cursorY = drawText(graphics, "\u5f53\u524d\u8fdb\u884c\u4e2d", margin, cursorY, sectionFont, contentWidth);
+                String sectionLabel = snapshot.onBreak()
+                        ? "\u4f11\u606f\u4e2d \u00b7 \u4e0b\u4e00\u9879 " + snapshot.startTime().format(TIME_FORMATTER) + " \u5f00\u59cb"
+                        : "\u5f53\u524d\u8fdb\u884c\u4e2d";
+                cursorY = drawText(graphics, sectionLabel, margin, cursorY, sectionFont, contentWidth);
                 cursorY += Math.max(30, height / 42);
                 cursorY = drawWrappedText(graphics, snapshot.title(), margin, cursorY, taskFont, contentWidth, 4, 1.12f);
                 cursorY += Math.max(46, height / 30);
@@ -76,7 +79,8 @@ public class KindleScreenRenderer {
 
                 if (snapshot.nextTitle() != null && !snapshot.nextTitle().isBlank()) {
                     cursorY += Math.max(42, height / 34);
-                    cursorY = drawWrappedText(graphics, "\u4e0b\u4e00\u9879\uff1a" + snapshot.nextTitle(), margin, cursorY, detailFont, contentWidth, 2, 1.25f);
+                    String nextLabel = snapshot.onBreak() ? "\u518d\u4e4b\u540e\uff1a" : "\u4e0b\u4e00\u9879\uff1a";
+                    cursorY = drawWrappedText(graphics, nextLabel + snapshot.nextTitle(), margin, cursorY, detailFont, contentWidth, 2, 1.25f);
                 }
             } else {
                 cursorY = drawText(graphics, "\u6682\u65e0\u8fdb\u884c\u4e2d\u7684\u4efb\u52a1", margin, cursorY, titleFont, contentWidth);
