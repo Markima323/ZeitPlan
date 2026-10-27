@@ -14,9 +14,10 @@ import {
   buildTaskTimeline,
   formatMinutes,
   getAutomaticBreakMinutes,
+  getNightPlanStartMinutes,
+  getPlanPreviewBlocks,
   MIN_SLOT_DURATION_MINUTES,
   normalizeSlotDuration,
-  parseClock,
   resolveClockAtOrAfter,
   todayIsoDate,
   toClock,
@@ -38,8 +39,6 @@ type AutoSaveState = "idle" | "saving" | "saved" | "error";
 type PreviewTarget = "day" | "evening";
 
 const DAY_PREVIEW_START_MINUTES = 6 * 60;
-const DAY_PREVIEW_END_MINUTES = 17 * 60;
-const EVENING_PREVIEW_START_MINUTES = 17 * 60;
 const EVENING_PREVIEW_END_MINUTES = 3 * 60;
 const EXPORT_PREVIEW_HORIZONTAL_PADDING = 32;
 const DAY_EXPORT_TABLE_MIN_WIDTH = 900;
@@ -53,14 +52,6 @@ function makeClientId() {
 
 function normalizeTaskTypeMatcher(value: string) {
   return value.trim().toLocaleLowerCase();
-}
-
-function isWithinPreviewRange(minutes: number, rangeStartMinutes: number, rangeEndMinutes: number) {
-  if (rangeStartMinutes < rangeEndMinutes) {
-    return minutes >= rangeStartMinutes && minutes < rangeEndMinutes;
-  }
-
-  return minutes >= rangeStartMinutes || minutes < rangeEndMinutes;
 }
 
 function toEditableTasks(tasks: PlanTaskResponse[], resetTaskIds = false): EditableTask[] {
@@ -231,7 +222,7 @@ function createExportPreviewNode(sourceNode: HTMLDivElement) {
 async function resolvePlanForDate(date: string): Promise<ResolvedPlanState> {
   const [plan, nextTaskTypes] = await Promise.all([apiClient.getPlan(date), apiClient.getTaskTypes()]);
 
-  if (plan.tasks.length > 0) {
+  if (plan.id !== null || plan.tasks.length > 0) {
     return {
       plan,
       taskTypes: nextTaskTypes,
@@ -247,6 +238,7 @@ async function resolvePlanForDate(date: string): Promise<ResolvedPlanState> {
         ...plan,
         tasks: latestPlan.tasks,
         nightPlanEnabled: latestPlan.nightPlanEnabled,
+        nightStartLocalTime: latestPlan.nightStartLocalTime,
       },
       taskTypes: nextTaskTypes,
       templateSourceDate: latestPlan.planDate,
@@ -278,6 +270,7 @@ export function SchedulePage({
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [dayStartLocalTime, setDayStartLocalTime] = useState("10:00");
   const [nightPlanEnabled, setNightPlanEnabled] = useState(true);
+  const [nightStartLocalTime, setNightStartLocalTime] = useState<string | null>(null);
   const [tasks, setTasks] = useState<EditableTask[]>([]);
   const [taskTypes, setTaskTypes] = useState<TaskTypeResponse[]>([]);
   const [templateSourceDate, setTemplateSourceDate] = useState<string | null>(null);
@@ -299,6 +292,7 @@ export function SchedulePage({
     setSelectedDate(nextDate);
     setDayStartLocalTime("10:00");
     setNightPlanEnabled(true);
+    setNightStartLocalTime(null);
     setTasks([]);
     setTemplateSourceDate(null);
     setFeedback(null);
@@ -319,6 +313,7 @@ export function SchedulePage({
           setTaskTypes(resolvedPlan.taskTypes);
           setDayStartLocalTime(resolvedPlan.plan.dayStartLocalTime.slice(0, 5));
           setNightPlanEnabled(resolvedPlan.plan.nightPlanEnabled);
+          setNightStartLocalTime(resolvedPlan.plan.nightStartLocalTime?.slice(0, 5) ?? null);
           setTasks(toEditableTasks(resolvedPlan.plan.tasks, resolvedPlan.resetTaskIds));
           setTemplateSourceDate(resolvedPlan.templateSourceDate);
           setIsDirty(false);
@@ -374,6 +369,7 @@ export function SchedulePage({
           seasonMode,
           dayStartLocalTime,
           nightPlanEnabled,
+          nightStartLocalTime,
           tasks: tasks.map((task, index) => ({
             id: task.id,
             title: task.title.trim(),
@@ -413,7 +409,7 @@ export function SchedulePage({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [dayStartLocalTime, isDirty, nightPlanEnabled, onSeasonSync, seasonMode, selectedDate, tasks, isLoading]);
+  }, [dayStartLocalTime, isDirty, nightPlanEnabled, nightStartLocalTime, onSeasonSync, seasonMode, selectedDate, tasks, isLoading]);
 
   const orderedTasks = useMemo(
     () => [...tasks].sort((left, right) => left.orderIndex - right.orderIndex),
@@ -425,33 +421,28 @@ export function SchedulePage({
     [orderedTasks],
   );
 
-  const taskTimeline = useMemo(() => buildTaskTimeline(orderedTasks, dayStartLocalTime), [dayStartLocalTime, orderedTasks]);
+  const nightStartMinutes = getNightPlanStartMinutes(seasonMode, nightStartLocalTime);
+  const nightStartClock = toClock(nightStartMinutes);
+  const taskTimeline = useMemo(
+    () => buildTaskTimeline(orderedTasks, dayStartLocalTime, nightStartMinutes),
+    [dayStartLocalTime, orderedTasks, nightStartMinutes],
+  );
 
   const schedule = useMemo(
-    () => buildScheduleBlocks(orderedTasks, taskTypes, dayStartLocalTime, seasonMode, nightPlanEnabled),
-    [dayStartLocalTime, nightPlanEnabled, orderedTasks, seasonMode, taskTypes],
+    () => buildScheduleBlocks(orderedTasks, taskTypes, dayStartLocalTime, seasonMode, nightPlanEnabled, nightStartLocalTime),
+    [dayStartLocalTime, nightPlanEnabled, nightStartLocalTime, orderedTasks, seasonMode, taskTypes],
   );
 
   const daytimePreviewBlocks = useMemo(
-    () =>
-      schedule.blocks.filter((block) =>
-        isWithinPreviewRange(parseClock(block.localStartTime), DAY_PREVIEW_START_MINUTES, DAY_PREVIEW_END_MINUTES),
-      ),
-    [schedule.blocks],
+    () => getPlanPreviewBlocks(schedule.blocks, DAY_PREVIEW_START_MINUTES, nightStartMinutes),
+    [schedule.blocks, nightStartMinutes],
   );
 
   const eveningPreviewBlocks = useMemo(
     () => nightPlanEnabled
-      ? (
-      schedule.blocks.filter((block) =>
-        isWithinPreviewRange(
-          parseClock(block.localStartTime),
-          EVENING_PREVIEW_START_MINUTES,
-          EVENING_PREVIEW_END_MINUTES,
-        ),
-      ))
+      ? getPlanPreviewBlocks(schedule.blocks, nightStartMinutes, EVENING_PREVIEW_END_MINUTES)
       : [],
-    [nightPlanEnabled, schedule.blocks],
+    [nightPlanEnabled, schedule.blocks, nightStartMinutes],
   );
 
   function updateTaskByIndex(index: number, changes: Partial<EditableTask>) {
@@ -482,7 +473,7 @@ export function SchedulePage({
     }
 
     const targetStartMinutes = resolveClockAtOrAfter(previousTimelineEntry.slotStartMinutes, nextTime);
-    const breakMinutesBeforeCurrent = getAutomaticBreakMinutes(index, targetStartMinutes);
+    const breakMinutesBeforeCurrent = getAutomaticBreakMinutes(index, targetStartMinutes, nightStartMinutes);
     updateTaskSlotDuration(
       index - 1,
       targetStartMinutes - breakMinutesBeforeCurrent - previousTimelineEntry.slotStartMinutes,
@@ -707,6 +698,38 @@ export function SchedulePage({
                 }}
               />
             </label>
+            <div className="field compact-field">
+              <label htmlFor="night-start-time">日夜分割时间</label>
+              <input
+                id="night-start-time"
+                type="time"
+                min="06:00"
+                max="23:55"
+                step={300}
+                value={nightStartClock}
+                disabled={isLoading}
+                onChange={(event) => {
+                  if (event.target.value && event.target.validity.valid) {
+                    setNightStartLocalTime(event.target.value);
+                    markDirty();
+                  }
+                }}
+              />
+              <span className="split-time-hint">
+                {nightStartLocalTime === null ? "默认：夏令时 17:00 / 冬令时 16:00" : (
+                  <button
+                    className="split-time-reset"
+                    type="button"
+                    onClick={() => {
+                      setNightStartLocalTime(null);
+                      markDirty();
+                    }}
+                  >
+                    恢复夏令时 / 冬令时默认值
+                  </button>
+                )}
+              </span>
+            </div>
             <label className="field compact-field">
               <span>夜计划导出</span>
               <button
@@ -873,6 +896,7 @@ export function SchedulePage({
                                           getAutomaticBreakMinutes(
                                             index,
                                             taskTimeline[index - 1].slotStartMinutes + MIN_SLOT_DURATION_MINUTES,
+                                            nightStartMinutes,
                                           ),
                                       )
                                     : undefined
@@ -963,7 +987,7 @@ export function SchedulePage({
                 <div>
                   <p className="eyebrow">ZeitPlan</p>
                   <h3>{selectedDate} 日计划</h3>
-                  <p className="preview-card-caption">德国 06:00-17:00 · 本地时间 / 北京时间对照</p>
+                  <p className="preview-card-caption">德国 06:00-{nightStartClock} · 本地时间 / 北京时间对照</p>
                 </div>
               </div>
 
@@ -1023,7 +1047,7 @@ export function SchedulePage({
                     {!isLoading && daytimePreviewBlocks.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="table-empty">
-                          06:00 到 17:00 之间还没有可导出的任务。
+                          06:00 到 {nightStartClock} 之间还没有可导出的任务。
                         </td>
                       </tr>
                     ) : null}
@@ -1038,7 +1062,7 @@ export function SchedulePage({
                   <div>
                     <p className="eyebrow">ZeitPlan</p>
                     <h3>{selectedDate} 夜间计划</h3>
-                    <p className="preview-card-caption">德国 17:00-03:00 · 仅显示德国本地时间</p>
+                    <p className="preview-card-caption">德国 {nightStartClock}-03:00 · 仅显示德国本地时间</p>
                   </div>
                 </div>
 
@@ -1094,7 +1118,7 @@ export function SchedulePage({
                       {!isLoading && eveningPreviewBlocks.length === 0 ? (
                         <tr>
                           <td colSpan={3} className="table-empty">
-                            17:00 到次日 03:00 之间还没有可导出的任务。
+                            {nightStartClock} 到次日 03:00 之间还没有可导出的任务。
                           </td>
                         </tr>
                       ) : null}

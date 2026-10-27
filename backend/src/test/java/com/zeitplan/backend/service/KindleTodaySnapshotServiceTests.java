@@ -2,6 +2,7 @@ package com.zeitplan.backend.service;
 
 import com.zeitplan.backend.entity.DailyPlanEntity;
 import com.zeitplan.backend.entity.PlanTaskEntity;
+import com.zeitplan.backend.entity.SeasonMode;
 import com.zeitplan.backend.repository.DailyPlanRepository;
 import org.junit.jupiter.api.Test;
 
@@ -61,13 +62,44 @@ class KindleTodaySnapshotServiceTests {
         assertThat(snapshot.onBreak()).isFalse();
     }
 
-    private void givenPlan(PlanTaskEntity... tasks) {
+    @Test
+    void winterNightStartsAtFourWithoutAutomaticBreak() {
+        DailyPlanEntity plan = givenPlan(task(1L, "Day", 60), task(2L, "Night", 60));
+        plan.setDayStartLocalTime(LocalTime.of(15, 0));
+        plan.setSeasonMode(SeasonMode.WINTER);
+
+        KindleTodaySnapshot snapshot = service.getCurrentSnapshot(PLAN_DATE, LocalTime.of(16, 1));
+
+        assertThat(snapshot.onBreak()).isFalse();
+        assertThat(snapshot.title()).isEqualTo("Night");
+        assertThat(snapshot.startTime()).isEqualTo(LocalTime.of(16, 0));
+    }
+
+    @Test
+    void kindleUsesCustomSplitForBreaks() {
+        DailyPlanEntity plan = givenPlan(task(1L, "Day", 60), task(2L, "Evening", 60), task(3L, "Night", 60));
+        plan.setDayStartLocalTime(LocalTime.of(15, 0));
+        plan.setSeasonMode(SeasonMode.WINTER);
+        plan.setNightStartLocalTime(LocalTime.of(17, 0));
+
+        KindleTodaySnapshot onBreak = service.getCurrentSnapshot(PLAN_DATE, LocalTime.of(16, 1));
+        KindleTodaySnapshot night = service.getCurrentSnapshot(PLAN_DATE, LocalTime.of(17, 1));
+
+        assertThat(onBreak.onBreak()).isTrue();
+        assertThat(onBreak.startTime()).isEqualTo(LocalTime.of(16, 5));
+        assertThat(night.onBreak()).isFalse();
+        assertThat(night.startTime()).isEqualTo(LocalTime.of(17, 0));
+    }
+
+    private DailyPlanEntity givenPlan(PlanTaskEntity... tasks) {
         DailyPlanEntity plan = new DailyPlanEntity();
         plan.setPlanDate(PLAN_DATE);
         plan.setDayStartLocalTime(LocalTime.of(10, 0));
+        plan.setSeasonMode(SeasonMode.SUMMER);
         List<PlanTaskEntity> taskList = new ArrayList<>(List.of(tasks));
         plan.setTasks(taskList);
         when(dailyPlanRepository.findByPlanDate(PLAN_DATE)).thenReturn(Optional.of(plan));
+        return plan;
     }
 
     private PlanTaskEntity task(Long id, String title, int durationMinutes) {

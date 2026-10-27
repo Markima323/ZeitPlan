@@ -613,8 +613,27 @@ button {
 .planner-settings {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
   gap: 14px;
   margin-bottom: 18px;
+}
+
+.field .split-time-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.split-time-reset {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .autosave-indicator {
@@ -801,7 +820,8 @@ button {
   gap: 8px;
 }
 
-.field span {
+.field span,
+.field > label {
   color: var(--muted);
   font-size: 0.9rem;
   font-weight: 700;
@@ -1800,7 +1820,8 @@ body {
   gap: 12px;
 }
 
-.field span {
+.field span,
+.field > label {
   font-size: 0.86rem;
   color: rgba(88, 70, 50, 0.82);
 }

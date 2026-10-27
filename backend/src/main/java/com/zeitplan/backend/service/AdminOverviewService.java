@@ -22,13 +22,6 @@ import java.util.Map;
 @Service
 public class AdminOverviewService {
 
-    private static final int BREAK_MINUTES = 5;
-    private static final LocalTime MIDDAY_SKIPPED_BREAK_START_TIME = LocalTime.of(11, 55);
-    private static final LocalTime NOON_SKIPPED_BREAK_START_TIME = LocalTime.of(12, 0);
-    private static final LocalTime SKIPPED_BREAK_START_TIME = LocalTime.of(14, 0);
-    private static final LocalTime EVENING_PLAN_START_TIME = LocalTime.of(17, 0);
-    private static final LocalTime EVENING_PLAN_END_TIME = LocalTime.of(3, 0);
-
     private final DailyPlanRepository dailyPlanRepository;
 
     public AdminOverviewService(DailyPlanRepository dailyPlanRepository) {
@@ -52,30 +45,35 @@ public class AdminOverviewService {
                     .sorted(Comparator.comparing(PlanTaskEntity::getOrderIndex))
                     .toList();
 
-            List<TimedTask> timedTasks = new ArrayList<>();
+            List<TimedTask> statsEligibleTasks = new ArrayList<>();
             int dayFocusMinutes = 0;
-            LocalTime cursor = plan.getDayStartLocalTime();
+            int cursor = plan.getDayStartLocalTime().getHour() * 60 + plan.getDayStartLocalTime().getMinute();
+            int nightStartMinutes = PlanScheduleRules.nightStartMinutes(plan);
 
             for (int index = 0; index < sortedTasks.size(); index++) {
                 PlanTaskEntity task = sortedTasks.get(index);
-                int breakMinutes = getAutomaticBreakMinutes(index, cursor);
-                LocalTime taskStartTime = cursor.plusMinutes(breakMinutes);
-                LocalTime taskEndTime = cursor.plusMinutes(task.getDurationMinutes());
+                int breakMinutes = PlanScheduleRules.automaticBreakMinutes(index, cursor, nightStartMinutes);
+                int taskStart = cursor + breakMinutes;
+                int taskEnd = cursor + task.getDurationMinutes();
                 int actualFocusMinutes = Math.max(task.getDurationMinutes() - breakMinutes, 0);
-                TimedTask timedTask = new TimedTask(task, taskStartTime, taskEndTime, actualFocusMinutes);
-                timedTasks.add(timedTask);
-
-                if (shouldIncludeInStatistics(plan, taskStartTime) && isFocusTask(task.getTaskType())) {
-                    dayFocusMinutes += actualFocusMinutes;
+                List<PlanScheduleRules.TimeRange> includedRanges = PlanScheduleRules.includedRanges(
+                        taskStart, actualFocusMinutes, plan.isNightPlanEnabled(), nightStartMinutes);
+                cursor = taskEnd;
+                if (includedRanges.isEmpty()) {
+                    continue;
                 }
-                cursor = taskEndTime;
+                int includedMinutes = includedRanges.stream()
+                        .mapToInt(range -> range.endMinutes() - range.startMinutes()).sum();
+                statsEligibleTasks.add(new TimedTask(task,
+                        toClock(includedRanges.getFirst().startMinutes()),
+                        toClock(includedRanges.getLast().endMinutes()), includedMinutes));
+
+                if (isFocusTask(task.getTaskType())) {
+                    dayFocusMinutes += includedMinutes;
+                }
             }
 
             focusMinutes += dayFocusMinutes;
-
-            List<TimedTask> statsEligibleTasks = timedTasks.stream()
-                    .filter(timedTask -> shouldIncludeInStatistics(plan, timedTask.startTime()))
-                    .toList();
 
             LocalTime firstTime = statsEligibleTasks.isEmpty()
                     ? null
@@ -129,27 +127,9 @@ public class AdminOverviewService {
         return taskType != null && taskType.isFocusTask();
     }
 
-    private boolean shouldIncludeInStatistics(DailyPlanEntity plan, LocalTime taskStartTime) {
-        return plan.isNightPlanEnabled() || !isWithinNightPlan(taskStartTime);
-    }
-
-    private int getAutomaticBreakMinutes(int taskIndex, LocalTime boundaryTime) {
-        if (taskIndex == 0) {
-            return 0;
-        }
-
-        if (MIDDAY_SKIPPED_BREAK_START_TIME.equals(boundaryTime)
-                || NOON_SKIPPED_BREAK_START_TIME.equals(boundaryTime)
-                || SKIPPED_BREAK_START_TIME.equals(boundaryTime)
-                || isWithinNightPlan(boundaryTime)) {
-            return 0;
-        }
-
-        return BREAK_MINUTES;
-    }
-
-    private boolean isWithinNightPlan(LocalTime time) {
-        return !time.isBefore(EVENING_PLAN_START_TIME) || time.isBefore(EVENING_PLAN_END_TIME);
+    private LocalTime toClock(int minutes) {
+        int normalized = Math.floorMod(minutes, 1440);
+        return LocalTime.of(normalized / 60, normalized % 60);
     }
 
     private static final class StatAccumulator {

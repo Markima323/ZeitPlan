@@ -41,6 +41,9 @@ public class DailyPlanEntity {
     @Column(name = "night_plan_enabled", nullable = false)
     private boolean nightPlanEnabled = true;
 
+    @Column(name = "night_start_local_time")
+    private LocalTime nightStartLocalTime;
+
     @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PlanTaskEntity> tasks = new ArrayList<>();
 
@@ -98,5 +101,13 @@ public class DailyPlanEntity {
 
     public void setNightPlanEnabled(boolean nightPlanEnabled) {
         this.nightPlanEnabled = nightPlanEnabled;
+    }
+
+    public LocalTime getNightStartLocalTime() {
+        return nightStartLocalTime;
+    }
+
+    public void setNightStartLocalTime(LocalTime nightStartLocalTime) {
+        this.nightStartLocalTime = nightStartLocalTime;
     }
 }

@@ -12,6 +12,7 @@ public record DailyPlanResponse(
         SeasonMode seasonMode,
         LocalTime dayStartLocalTime,
         boolean nightPlanEnabled,
+        LocalTime nightStartLocalTime,
         List<PlanTaskResponse> tasks
 ) {
 }

@@ -28,6 +28,7 @@ public final class PlanMapper {
                 entity.getSeasonMode(),
                 entity.getDayStartLocalTime(),
                 entity.isNightPlanEnabled(),
+                entity.getNightStartLocalTime(),
                 tasks
         );
     }

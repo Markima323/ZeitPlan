@@ -121,6 +121,7 @@ export function TodayPlanPage({
         plan?.dayStartLocalTime.slice(0, 5) ?? "10:00",
         seasonMode,
         plan?.nightPlanEnabled ?? true,
+        plan?.nightStartLocalTime ?? null,
       ),
     [plan, seasonMode, taskTypes],
   );

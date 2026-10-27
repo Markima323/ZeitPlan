@@ -30,6 +30,10 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Test frontend schedule rules
+        working-directory: frontend
+        run: npm test
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:

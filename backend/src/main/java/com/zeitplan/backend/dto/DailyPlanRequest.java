@@ -13,6 +13,7 @@ public record DailyPlanRequest(
         @NotNull SeasonMode seasonMode,
         @NotNull LocalTime dayStartLocalTime,
         @NotNull Boolean nightPlanEnabled,
+        LocalTime nightStartLocalTime,
         @NotNull List<@Valid PlanTaskRequest> tasks
 ) {
 }

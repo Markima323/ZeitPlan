@@ -19,12 +19,6 @@ import java.util.List;
 public class KindleTodaySnapshotService {
 
     private static final int BREAK_MINUTES = 5;
-    private static final int MIDDAY_SKIPPED_BREAK_START_MINUTES = (11 * 60) + 55;
-    private static final int NOON_SKIPPED_BREAK_START_MINUTES = 12 * 60;
-    private static final int AFTERNOON_SKIPPED_BREAK_START_MINUTES = 14 * 60;
-    private static final int EVENING_PLAN_START_MINUTES = 17 * 60;
-    private static final int EVENING_PLAN_END_MINUTES = 3 * 60;
-
     private final DailyPlanRepository dailyPlanRepository;
     private final Clock clock;
     private final ZoneId zoneId;
@@ -59,6 +53,7 @@ public class KindleTodaySnapshotService {
                 .toList();
 
         int cursor = toMinutes(plan.getDayStartLocalTime());
+        int nightStartMinutes = PlanScheduleRules.nightStartMinutes(plan);
         int nowMinutes = toMinutes(now);
         if (nowMinutes < cursor) {
             nowMinutes += 1440;
@@ -66,7 +61,7 @@ public class KindleTodaySnapshotService {
 
         for (int index = 0; index < tasks.size(); index++) {
             PlanTaskEntity task = tasks.get(index);
-            int breakMinutesBefore = getAutomaticBreakMinutes(index, cursor);
+            int breakMinutesBefore = PlanScheduleRules.automaticBreakMinutes(index, cursor, nightStartMinutes);
             int taskStart = cursor + breakMinutesBefore;
             int taskEnd = cursor + Math.max(BREAK_MINUTES * 2, task.getDurationMinutes());
 
@@ -128,29 +123,6 @@ public class KindleTodaySnapshotService {
         }
 
         return tasks.get(currentIndex + 1).getTitle();
-    }
-
-    private int getAutomaticBreakMinutes(int taskIndex, int boundaryMinutes) {
-        if (taskIndex == 0) {
-            return 0;
-        }
-
-        int normalizedBoundary = Math.floorMod(boundaryMinutes, 1440);
-        if (
-                normalizedBoundary == MIDDAY_SKIPPED_BREAK_START_MINUTES ||
-                normalizedBoundary == NOON_SKIPPED_BREAK_START_MINUTES ||
-                normalizedBoundary == AFTERNOON_SKIPPED_BREAK_START_MINUTES ||
-                isWithinNightPlan(normalizedBoundary)
-        ) {
-            return 0;
-        }
-
-        return BREAK_MINUTES;
-    }
-
-    private boolean isWithinNightPlan(int minutes) {
-        int normalizedMinutes = Math.floorMod(minutes, 1440);
-        return normalizedMinutes >= EVENING_PLAN_START_MINUTES || normalizedMinutes < EVENING_PLAN_END_MINUTES;
     }
 
     private int toMinutes(LocalTime time) {

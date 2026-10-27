@@ -48,7 +48,7 @@ public class DailyPlanService {
     public DailyPlanResponse getPlan(LocalDate planDate) {
         return dailyPlanRepository.findByPlanDate(planDate)
                 .map(PlanMapper::toResponse)
-                .orElseGet(() -> new DailyPlanResponse(null, planDate, SeasonMode.SUMMER, LocalTime.of(10, 0), true, List.of()));
+                .orElseGet(() -> new DailyPlanResponse(null, planDate, SeasonMode.SUMMER, LocalTime.of(10, 0), true, null, List.of()));
     }
 
     @Transactional(readOnly = true)
@@ -64,6 +64,7 @@ public class DailyPlanService {
         }
 
         validateFiveMinuteStep(request.dayStartLocalTime());
+        validateNightStartTime(request.nightStartLocalTime());
 
         DailyPlanEntity entity = dailyPlanRepository.findByPlanDate(pathDate)
                 .orElseGet(DailyPlanEntity::new);
@@ -72,6 +73,7 @@ public class DailyPlanService {
         entity.setSeasonMode(request.seasonMode());
         entity.setDayStartLocalTime(request.dayStartLocalTime());
         entity.setNightPlanEnabled(Boolean.TRUE.equals(request.nightPlanEnabled()));
+        entity.setNightStartLocalTime(request.nightStartLocalTime());
 
         Map<Long, PlanTaskEntity> existingTasks = new HashMap<>();
         entity.getTasks().forEach(task -> existingTasks.put(task.getId(), task));
@@ -123,6 +125,13 @@ public class DailyPlanService {
     private void validateFiveMinuteStep(LocalTime time) {
         if (time.getMinute() % BREAK_MINUTES != 0) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "开始时间需要按 5 分钟为单位设置");
+        }
+    }
+
+    private void validateNightStartTime(LocalTime time) {
+        if (time != null && (time.isBefore(LocalTime.of(6, 0))
+                || time.getMinute() % BREAK_MINUTES != 0 || time.getSecond() != 0 || time.getNano() != 0)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "日夜分割时间需要在 06:00 到 23:55 之间，且为 5 分钟整数倍");
         }
     }
 }

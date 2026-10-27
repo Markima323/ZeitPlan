@@ -6,7 +6,6 @@ export const MAX_SLOT_DURATION_MINUTES = 1440;
 export const MIDDAY_SKIPPED_BREAK_START_MINUTES = (11 * 60) + 55;
 export const NOON_SKIPPED_BREAK_START_MINUTES = 12 * 60;
 export const SKIPPED_BREAK_START_MINUTES = 14 * 60;
-export const EVENING_PLAN_START_MINUTES = 17 * 60;
 export const EVENING_PLAN_END_MINUTES = 3 * 60;
 
 export interface ScheduleBlock {
@@ -36,8 +35,28 @@ export interface TaskTimelineEntry {
   hasBreakBefore: boolean;
 }
 
-export function shouldIncludeNightPlanContent(nightPlanEnabled: boolean, startMinutes: number) {
-  return nightPlanEnabled || !isWithinNightPlan(startMinutes);
+export function getNightPlanStartMinutes(seasonMode: SeasonMode, nightStartLocalTime: string | null = null) {
+  return nightStartLocalTime ? parseClock(nightStartLocalTime) : (seasonMode === "WINTER" ? 16 : 17) * 60;
+}
+
+export function getIncludedPlanMinutes(
+  startMinutes: number,
+  durationMinutes: number,
+  nightPlanEnabled: boolean,
+  nightStartMinutes: number,
+) {
+  if (nightPlanEnabled) {
+    return durationMinutes;
+  }
+
+  const endMinutes = startMinutes + durationMinutes;
+  let total = 0;
+  for (let day = Math.floor(startMinutes / 1440); day <= Math.floor(endMinutes / 1440); day++) {
+    const dayStart = day * 1440;
+    total += Math.max(0, Math.min(endMinutes, dayStart + nightStartMinutes)
+      - Math.max(startMinutes, dayStart + EVENING_PLAN_END_MINUTES));
+  }
+  return total;
 }
 
 export function todayIsoDate() {
@@ -60,15 +79,15 @@ export function parseClock(value: string) {
   return (hours * 60) + minutes;
 }
 
-export function isWithinNightPlan(minutes: number) {
+export function isWithinNightPlan(minutes: number, nightStartMinutes: number) {
   const normalizedMinutes = ((minutes % 1440) + 1440) % 1440;
   return (
-    normalizedMinutes >= EVENING_PLAN_START_MINUTES ||
+    normalizedMinutes >= nightStartMinutes ||
     normalizedMinutes < EVENING_PLAN_END_MINUTES
   );
 }
 
-export function getAutomaticBreakMinutes(taskIndex: number, boundaryMinutes: number) {
+export function getAutomaticBreakMinutes(taskIndex: number, boundaryMinutes: number, nightStartMinutes: number) {
   if (taskIndex === 0) {
     return 0;
   }
@@ -78,7 +97,7 @@ export function getAutomaticBreakMinutes(taskIndex: number, boundaryMinutes: num
     normalizedBoundary === MIDDAY_SKIPPED_BREAK_START_MINUTES ||
     normalizedBoundary === NOON_SKIPPED_BREAK_START_MINUTES ||
     normalizedBoundary === SKIPPED_BREAK_START_MINUTES ||
-    isWithinNightPlan(normalizedBoundary)
+    isWithinNightPlan(normalizedBoundary, nightStartMinutes)
   ) {
     return 0;
   }
@@ -124,11 +143,13 @@ export function buildScheduleBlocks(
   dayStartLocalTime: string,
   seasonMode: SeasonMode,
   nightPlanEnabled = true,
+  nightStartLocalTime: string | null = null,
 ) {
   const offsetMinutes = seasonMode === "SUMMER" ? 360 : 420;
   const taskTypeMap = new Map(taskTypes.map((item) => [item.id, item]));
   const sortedTasks = [...tasks].sort((left, right) => left.orderIndex - right.orderIndex);
-  const timeline = buildTaskTimeline(sortedTasks, dayStartLocalTime);
+  const nightStartMinutes = getNightPlanStartMinutes(seasonMode, nightStartLocalTime);
+  const timeline = buildTaskTimeline(sortedTasks, dayStartLocalTime, nightStartMinutes);
 
   const blocks: ScheduleBlock[] = [];
 
@@ -178,27 +199,25 @@ export function buildScheduleBlocks(
     focusMinutes: sortedTasks.reduce((sum, task, index) => {
       const taskType = task.taskTypeId ? taskTypeMap.get(task.taskTypeId) : undefined;
       return sum + (
-        taskType?.focusTask && shouldIncludeNightPlanContent(nightPlanEnabled, timeline[index].taskStartMinutes)
-          ? timeline[index].focusMinutes
+        taskType?.focusTask
+          ? getIncludedPlanMinutes(timeline[index].taskStartMinutes, timeline[index].focusMinutes, nightPlanEnabled, nightStartMinutes)
           : 0
       );
     }, 0),
-    breakMinutes: timeline.reduce((sum, item) => (
-      shouldIncludeNightPlanContent(nightPlanEnabled, item.slotStartMinutes)
-        ? sum + item.breakMinutesBefore
-        : sum
+    breakMinutes: timeline.reduce((sum, item) => sum + getIncludedPlanMinutes(
+      item.slotStartMinutes, item.breakMinutesBefore, nightPlanEnabled, nightStartMinutes,
     ), 0),
   };
 }
 
-export function buildTaskTimeline(tasks: PlanTaskResponse[], dayStartLocalTime: string) {
+export function buildTaskTimeline(tasks: PlanTaskResponse[], dayStartLocalTime: string, nightStartMinutes: number) {
   let cursor = parseClock(dayStartLocalTime);
 
   return [...tasks]
     .sort((left, right) => left.orderIndex - right.orderIndex)
     .map((task, index) => {
       const slotDurationMinutes = normalizeSlotDuration(task.durationMinutes);
-      const breakMinutesBefore = getAutomaticBreakMinutes(index, cursor);
+      const breakMinutesBefore = getAutomaticBreakMinutes(index, cursor, nightStartMinutes);
       const hasBreakBefore = breakMinutesBefore > 0;
       const taskStartMinutes = cursor + breakMinutesBefore;
       const taskEndMinutes = cursor + slotDurationMinutes;
@@ -218,4 +237,34 @@ export function buildTaskTimeline(tasks: PlanTaskResponse[], dayStartLocalTime: 
       cursor = taskEndMinutes;
       return entry;
     });
+}
+
+export function getPlanPreviewBlocks(blocks: ScheduleBlock[], rangeStartMinutes: number, rangeEndMinutes: number) {
+  if (rangeStartMinutes === rangeEndMinutes) {
+    return [];
+  }
+  const rangeEnd = rangeEndMinutes > rangeStartMinutes ? rangeEndMinutes : rangeEndMinutes + 1440;
+  return blocks.flatMap((block) => {
+    const start = parseClock(block.localStartTime);
+    return [-1440, 0, 1440].flatMap((shift) => {
+      const blockStart = start + shift;
+      const clippedStart = Math.max(blockStart, rangeStartMinutes);
+      const clippedEnd = Math.min(blockStart + block.durationMinutes, rangeEnd);
+      if (clippedStart >= clippedEnd) {
+        return [];
+      }
+
+      // Clip crossing tasks to each preview without changing their editor identity.
+      const offset = parseClock(block.beijingStartTime) - start;
+      return [{
+        ...block,
+        id: `${block.id}-${clippedStart}`,
+        durationMinutes: clippedEnd - clippedStart,
+        localStartTime: toClock(clippedStart),
+        localEndTime: toClock(clippedEnd),
+        beijingStartTime: toClock(clippedStart + offset),
+        beijingEndTime: toClock(clippedEnd + offset),
+      }];
+    });
+  });
 }
