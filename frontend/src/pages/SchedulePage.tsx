@@ -236,6 +236,7 @@ async function resolvePlanForDate(date: string): Promise<ResolvedPlanState> {
     return {
       plan: {
         ...plan,
+        seasonMode: latestPlan.seasonMode,
         tasks: latestPlan.tasks,
         nightPlanEnabled: latestPlan.nightPlanEnabled,
         nightStartLocalTime: latestPlan.nightStartLocalTime,

@@ -48,7 +48,12 @@ public class DailyPlanService {
     public DailyPlanResponse getPlan(LocalDate planDate) {
         return dailyPlanRepository.findByPlanDate(planDate)
                 .map(PlanMapper::toResponse)
-                .orElseGet(() -> new DailyPlanResponse(null, planDate, SeasonMode.SUMMER, LocalTime.of(10, 0), true, null, List.of()));
+                .orElseGet(() -> {
+                    SeasonMode seasonMode = dailyPlanRepository.findFirstByPlanDateBeforeOrderByPlanDateDesc(planDate)
+                            .map(DailyPlanEntity::getSeasonMode)
+                            .orElse(SeasonMode.SUMMER);
+                    return new DailyPlanResponse(null, planDate, seasonMode, LocalTime.of(10, 0), true, null, List.of());
+                });
     }
 
     @Transactional(readOnly = true)

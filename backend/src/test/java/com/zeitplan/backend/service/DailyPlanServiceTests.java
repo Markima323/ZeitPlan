@@ -11,6 +11,7 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -118,6 +119,54 @@ class DailyPlanServiceTests {
                 date, SeasonMode.WINTER, LocalTime.of(10, 0), true, LocalTime.parse(value), List.of())))
                 .isInstanceOf(ApiException.class).hasMessageContaining("日夜分割时间");
         assertThat(dailyPlanRepository.findByPlanDate(date)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @EnumSource(SeasonMode.class)
+    void newDateInheritsLatestEarlierSeasonWithoutCreatingPlan(SeasonMode seasonMode) {
+        LocalDate date = LocalDate.of(2026, 10, 28);
+        SeasonMode otherMode = seasonMode == SeasonMode.WINTER ? SeasonMode.SUMMER : SeasonMode.WINTER;
+        saveEmptyPlan(date.minusDays(3), otherMode);
+        saveEmptyPlan(date.minusDays(1), seasonMode);
+        saveEmptyPlan(date.plusDays(1), otherMode);
+        entityManager.flush();
+        entityManager.clear();
+
+        DailyPlanResponse plan = dailyPlanService.getPlan(date);
+
+        assertThat(plan.seasonMode()).isEqualTo(seasonMode);
+        assertThat(plan.id()).isNull();
+        assertThat(plan.planDate()).isEqualTo(date);
+        assertThat(plan.tasks()).isEmpty();
+        assertThat(plan.dayStartLocalTime()).isEqualTo(LocalTime.of(10, 0));
+        assertThat(dailyPlanRepository.findByPlanDate(date)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @EnumSource(SeasonMode.class)
+    void savedDateKeepsItsOwnSeasonMode(SeasonMode seasonMode) {
+        LocalDate date = LocalDate.of(2026, 10, 28);
+        SeasonMode otherMode = seasonMode == SeasonMode.WINTER ? SeasonMode.SUMMER : SeasonMode.WINTER;
+        saveEmptyPlan(date.minusDays(1), otherMode);
+        saveEmptyPlan(date, seasonMode);
+        saveEmptyPlan(date.plusDays(1), otherMode);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(dailyPlanService.getPlan(date).seasonMode()).isEqualTo(seasonMode);
+    }
+
+    @Test
+    void newDateWithoutEarlierPlansKeepsDefaultSeasonMode() {
+        LocalDate date = LocalDate.of(2026, 10, 28);
+        saveEmptyPlan(date.plusDays(1), SeasonMode.WINTER);
+
+        assertThat(dailyPlanService.getPlan(date).seasonMode()).isEqualTo(SeasonMode.SUMMER);
+    }
+
+    private void saveEmptyPlan(LocalDate date, SeasonMode seasonMode) {
+        dailyPlanService.savePlan(date, new DailyPlanRequest(
+                date, seasonMode, LocalTime.of(10, 0), true, null, List.of()));
     }
 
     private TaskTypeEntity taskType(String name) {
