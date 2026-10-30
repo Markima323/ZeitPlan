@@ -159,14 +159,57 @@ class DailyPlanServiceTests {
     @Test
     void newDateWithoutEarlierPlansKeepsDefaultSeasonMode() {
         LocalDate date = LocalDate.of(2026, 10, 28);
-        saveEmptyPlan(date.plusDays(1), SeasonMode.WINTER);
+        saveEmptyPlan(date.plusDays(1), SeasonMode.WINTER, LocalTime.of(11, 15));
 
         assertThat(dailyPlanService.getPlan(date).seasonMode()).isEqualTo(SeasonMode.SUMMER);
+        assertThat(dailyPlanService.getPlan(date).dayStartLocalTime()).isEqualTo(LocalTime.of(10, 0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"09:30", "11:15", "00:00"})
+    void newDateInheritsLatestEarlierStartTime(String value) {
+        LocalDate date = LocalDate.of(2026, 10, 30);
+        LocalTime startTime = LocalTime.parse(value);
+        saveEmptyPlan(date.minusDays(4), SeasonMode.SUMMER, LocalTime.of(8, 0));
+        saveEmptyPlan(date.minusDays(2), SeasonMode.WINTER, startTime);
+        saveEmptyPlan(date.plusDays(1), SeasonMode.SUMMER, LocalTime.of(12, 0));
+        entityManager.flush();
+        entityManager.clear();
+
+        DailyPlanResponse plan = dailyPlanService.getPlan(date);
+
+        assertThat(plan.dayStartLocalTime()).isEqualTo(startTime);
+        assertThat(plan.seasonMode()).isEqualTo(SeasonMode.WINTER);
+        assertThat(plan.id()).isNull();
+        assertThat(dailyPlanRepository.findByPlanDate(date)).isEmpty();
+
+        dailyPlanService.savePlan(date, new DailyPlanRequest(
+                date, plan.seasonMode(), plan.dayStartLocalTime(), true, null, List.of()));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(dailyPlanService.getPlan(date).dayStartLocalTime()).isEqualTo(startTime);
+    }
+
+    @Test
+    void savedDateKeepsItsOwnStartTime() {
+        LocalDate date = LocalDate.of(2026, 10, 30);
+        saveEmptyPlan(date.minusDays(1), SeasonMode.WINTER, LocalTime.of(9, 30));
+        saveEmptyPlan(date, SeasonMode.WINTER, LocalTime.of(10, 0));
+        saveEmptyPlan(date.plusDays(1), SeasonMode.WINTER, LocalTime.of(11, 15));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(dailyPlanService.getPlan(date).dayStartLocalTime()).isEqualTo(LocalTime.of(10, 0));
     }
 
     private void saveEmptyPlan(LocalDate date, SeasonMode seasonMode) {
+        saveEmptyPlan(date, seasonMode, LocalTime.of(10, 0));
+    }
+
+    private void saveEmptyPlan(LocalDate date, SeasonMode seasonMode, LocalTime startTime) {
         dailyPlanService.savePlan(date, new DailyPlanRequest(
-                date, seasonMode, LocalTime.of(10, 0), true, null, List.of()));
+                date, seasonMode, startTime, true, null, List.of()));
     }
 
     private TaskTypeEntity taskType(String name) {
